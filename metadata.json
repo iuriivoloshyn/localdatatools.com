@@ -1,0 +1,5 @@
+{
+  "name": "localdatatools.com",
+  "description": "Secure, local-first data processing tools. Combine massive CSV files (1GB+), extract text from images (OCR), and clean data entirely in your browser.",
+  "requestFramePermissions": []
+}

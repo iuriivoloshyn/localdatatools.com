@@ -1,0 +1,18 @@
+
+{
+  "name": "Local Data Tools",
+  "short_name": "LocalData",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
+  "description": "Secure, local-first data processing tools. Merge CSVs, extract text from images (OCR), and clean data entirely in your browser.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
