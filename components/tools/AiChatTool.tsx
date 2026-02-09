@@ -20,12 +20,11 @@ const AiChatTool: React.FC = () => {
     progress: modelProgress, 
     progressVal: modelProgressVal, 
     error: modelError, 
-    initGemma,
-    chatHistory: messages,
-    addChatMessage,
-    clearChatHistory
+    initGemma
   } = useGemma();
 
+  // Local Chat History State
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isOcrActive, setIsOcrActive] = useState(false);
@@ -46,8 +45,12 @@ const AiChatTool: React.FC = () => {
     }
   }, [messages, pendingImages, isSending]);
 
+  const addChatMessage = (msg: ChatMessage) => {
+    setMessages(prev => [...prev, msg]);
+  };
+
   const handleReset = () => {
-    clearChatHistory();
+    setMessages([]);
     setPendingImages([]);
     setInput('');
   };

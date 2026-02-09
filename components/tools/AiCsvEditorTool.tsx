@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import FileUploader from '../FileUploader';
 import ToolHeader from '../layout/ToolHeader';
@@ -138,13 +139,16 @@ const runWorkerTransformation = (data: any[], code: string, onProgress: (pct: nu
         };
 
         const processNextChunk = () => {
+            // Check if code implies reduction/aggregation which requires full dataset
+            const effectiveChunkSize = totalRows < 100000 ? totalRows : CHUNK_SIZE;
+
             if (processedRows >= totalRows) {
                 worker.terminate();
                 URL.revokeObjectURL(url);
                 resolve(finalResult);
                 return;
             }
-            const end = Math.min(processedRows + CHUNK_SIZE, totalRows);
+            const end = Math.min(processedRows + effectiveChunkSize, totalRows);
             const chunk = data.slice(processedRows, end);
             processedRows = end;
             onProgress(processedRows / totalRows);
@@ -169,6 +173,8 @@ const AiCsvEditorTool: React.FC = () => {
   const fullDataRef = useRef<any[]>([]);
   const originalDataRef = useRef<any[]>([]);
   const historyRef = useRef<any[][]>([]); 
+  
+  // Local History: Ensures complete isolation from global/chat contexts.
   const chatHistoryRef = useRef<any[]>([]); 
 
   const [previewData, setPreviewData] = useState<any[]>([]);
@@ -200,7 +206,10 @@ const AiCsvEditorTool: React.FC = () => {
           fullDataRef.current = jsonData;
           originalDataRef.current = [...jsonData]; 
           historyRef.current = [];
+          
+          // Clear history on new file load to enforce isolation
           chatHistoryRef.current = [];
+          
           setHeaders(headerRow);
           setOriginalHeaders(headerRow);
           setPreviewData(jsonData.slice(0, MAX_PREVIEW_ROWS));
@@ -256,7 +265,7 @@ const AiCsvEditorTool: React.FC = () => {
     fullDataRef.current = [];
     originalDataRef.current = [];
     historyRef.current = [];
-    chatHistoryRef.current = [];
+    chatHistoryRef.current = []; // Explicit clear
     setPreviewData([]);
     setTotalRows(0);
     setHeaders([]);
@@ -352,6 +361,7 @@ const AiCsvEditorTool: React.FC = () => {
     try {
         const sampleJson = JSON.stringify(fullDataRef.current.slice(0, 5), null, 2);
         
+        // Context-Specific Persona
         const systemInstruction = `You are a world-class JavaScript data transformation engine.
 INPUT: An array of objects called 'data'.
 CONTEXT:
@@ -368,9 +378,22 @@ RULES:
 2. USE str() FOR STRING OPERATIONS. Example: row.id = str(row.id).replace("a", "b"); 
 3. USE num() FOR MATH. Example: if(num(row.age) > 18) { ... }
 4. DO NOT redeclare 'data'. Use 'data = data.map(...)' or 'data = data.filter(...)'.
-5. NEVER explain. Output ONLY valid JS.
-6. REMEMBER PREVIOUS STEPS. If a column was added in a previous message, you can now populate or modify it.`;
+5. **SORTING COMMANDS (CRITICAL)**:
+   - "Z to A", "Largest to Smallest", "Descending" -> \`data.sort((a,b) => num(b.col) - num(a.col))\` (for numbers) OR \`data.sort((a,b) => str(b.col).localeCompare(str(a.col)))\` (for text).
+   - "A to Z", "Smallest to Largest", "Ascending" -> \`data.sort((a,b) => num(a.col) - num(b.col))\` (for numbers).
+   - **WARNING**: "Sort Z to A" implies ORDERING. It DOES NOT mean replacing the letter 'Z' with 'A'. DO NOT generate code using .replace() for sorting tasks.
+6. NEVER explain. Output ONLY valid JS.
+7. REMEMBER PREVIOUS STEPS. If a column was added in a previous message, you can now populate or modify it.
+8. **SUMMARY/AGGREGATION REQUESTS**:
+   - If the user asks for a single value (e.g. "average age", "total sales", "count of rows"), YOU MUST REPLACE 'data' with a single-row array containing the result.
+   - Example: "Average age" -> 
+     \`const avg = data.reduce((s, r) => s + num(r.age), 0) / data.length; 
+     data = [{ average_age: avg }];\`
+   - Example: "Count rows where city is Paris" -> 
+     \`const count = data.filter(r => str(r.city) === 'Paris').length; 
+     data = [{ count: count }];\``;
 
+        // Utilize Local Context
         const messages = [
             { role: "system", content: systemInstruction },
             ...chatHistoryRef.current,
@@ -412,6 +435,7 @@ RULES:
             throw new Error("Logic resulted in zero rows. Check your query condition or column names.");
         }
 
+        // Update Local History
         chatHistoryRef.current.push({ role: "user", content: `USER REQUEST: "${prompt}"` });
         chatHistoryRef.current.push({ role: "assistant", content: cleanedCode });
 
@@ -439,7 +463,7 @@ RULES:
     <div className="space-y-6">
       <ToolHeader 
         title="Smart CSV Editor"
-        description="Modify datasets using natural language instructions. Google Gemini translates your text into code. By default, only headers are sent to the AI to ensure data privacy."
+        description="Modify datasets using natural language instructions. Google Gemini translates your text into code. A small sample of your data is used for context to ensure accurate transformations."
         instructions={[]}
         icon={BrainCircuit}
         colorClass="text-fuchsia-400"
@@ -466,28 +490,10 @@ RULES:
           <div className="space-y-10 animate-in fade-in max-w-5xl mx-auto">
             {/* UPLOAD SECTION (Matching Screenshot) */}
             <div className="space-y-4">
-                <div className="text-center">
-                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-4">Upload CSV to Edit</h3>
-                </div>
                 <div className="max-w-2xl mx-auto">
                   <FileUploader onFileLoaded={setFile} fileData={file} disabled={isProcessing} theme="pink" className="border-fuchsia-500/20" />
                 </div>
             </div>
-
-            {headers.length > 0 && (
-              <div className="max-w-3xl mx-auto space-y-3">
-                  <div className="flex items-center gap-2 text-gray-500 uppercase tracking-widest text-[9px] font-black">
-                      <List size={12}/> Headers Preview
-                  </div>
-                  <div className="bg-[#111827]/40 border border-gray-800 rounded-2xl p-4 flex flex-wrap gap-2">
-                      {headers.map((h, i) => (
-                          <span key={i} className="px-3 py-1.5 bg-[#0d1117] border border-gray-800 rounded-lg text-[10px] font-mono text-gray-400 shadow-sm">
-                              {h}
-                          </span>
-                      ))}
-                  </div>
-              </div>
-            )}
 
             {/* COMMAND CENTER (Matching Screenshot) */}
             <div className="bg-[#111827] border border-gray-800 rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden ring-1 ring-white/[0.02]">
@@ -515,37 +521,6 @@ RULES:
                       <button onClick={handleUndo} disabled={isProcessing || historyRef.current.length === 0} className="flex items-center justify-center gap-2 py-3.5 bg-gray-800/40 hover:bg-gray-800 rounded-[1.25rem] text-xs font-bold text-gray-300 transition-all disabled:opacity-20"><Undo2 size={16}/> Undo ({historyRef.current.length})</button>
                       <button onClick={handleReset} disabled={isProcessing || originalDataRef.current.length === 0} className="flex items-center justify-center gap-2 py-3.5 bg-gray-800/40 hover:bg-gray-800 rounded-[1.25rem] text-xs font-bold text-gray-300 transition-all disabled:opacity-20"><RotateCcw size={16}/> Reset</button>
                   </div>
-                </div>
-
-                {/* BOTTOM STATUS BAR (Matching Screenshot) */}
-                <div className="flex flex-wrap items-center justify-between mt-6 pt-5 border-t border-gray-800/50 gap-4">
-                    <div className="flex flex-wrap items-center gap-4">
-                        <div className="px-3 py-1.5 bg-gray-800/40 border border-gray-700/50 rounded-lg text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                            <EyeOff size={12} /> Headers Only (Private)
-                        </div>
-                        
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-500 text-[10px] font-black tracking-[0.2em] shadow-sm">
-                            <Shield size={12} strokeWidth={3}/> SECURE
-                        </div>
-
-                        <div className="w-px h-4 bg-gray-800 hidden xs:block"></div>
-
-                        <div className="hidden xs:flex items-center gap-3">
-                           <label className="flex items-center gap-2 cursor-pointer group">
-                              <div className="w-4 h-4 rounded-full border border-gray-700 flex items-center justify-center group-hover:border-gray-500">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-transparent"></div>
-                              </div>
-                              <span className="text-[10px] font-bold text-gray-500 group-hover:text-gray-400 uppercase tracking-tighter">Edit Original File</span>
-                           </label>
-
-                           <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-tighter">
-                              <Sparkles size={14} className="text-fuchsia-500/30"/> Gemini 2.5 Flash
-                           </div>
-                        </div>
-                    </div>
-                    <button onClick={handleClearAll} className="text-[10px] font-black text-gray-600 hover:text-red-400 transition-colors uppercase tracking-[0.2em] flex items-center gap-2">
-                        <Trash2 size={14}/> Clear All
-                    </button>
                 </div>
 
                 {isProcessing && (

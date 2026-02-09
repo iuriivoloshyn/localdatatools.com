@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, Suspense, createContext, useContext } from 'react';
 import { ToolType, Language } from './types';
-import { Layers, Zap, ScanText, ChevronDown, Loader2, Snowflake, X, Maximize, Minimize, RotateCcw, BookOpen, Settings as SettingsIcon, RefreshCw, Eye, VenetianMask, BrainCircuit, Shield, HardDrive, Cpu, Lock, Database, Wrench, ArrowRight, Lightbulb, Fingerprint, MessageSquareText, MessageCircle, ExternalLink, Minimize2, GitCompare, Wifi, WifiOff, Download, CheckCircle2, Info, LayoutDashboard } from 'lucide-react';
+import { Layers, Zap, ScanText, ChevronDown, Loader2, Snowflake, X, Maximize, Minimize, RotateCcw, BookOpen, Settings as SettingsIcon, RefreshCw, Eye, VenetianMask, BrainCircuit, Shield, HardDrive, Cpu, Lock, Database, Wrench, ArrowRight, Lightbulb, Fingerprint, MessageSquareText, MessageCircle, ExternalLink, Minimize2, GitCompare, Wifi, WifiOff, Download, CheckCircle2, Info, LayoutDashboard, Github } from 'lucide-react';
 import Snowfall, { SnowfallLayerConfig } from './components/effects/Snowfall';
 import SantaFace from './components/effects/SantaFace';
 import { GemmaProvider, useGemma } from './contexts/GemmaContext';
@@ -25,11 +25,13 @@ const AppContext = createContext<{
   setLang: (l: Language) => void; 
   t: (key: string) => string;
   isProMode: boolean;
+  setIsProMode: (val: boolean) => void;
 }>({
   lang: 'en',
   setLang: () => {},
   t: (k) => k,
   isProMode: true,
+  setIsProMode: () => {},
 });
 
 export const useLanguage = () => useContext(AppContext);
@@ -237,8 +239,8 @@ const SidebarButton: React.FC<SidebarButtonProps> = ({ config, isActive, isProMo
         onClick={onClick}
         className={`w-full relative flex items-center gap-3 px-3 ${isProMode ? 'py-3' : 'py-2.5'} rounded-xl text-left transition-all duration-200 group outline-none
             ${isActive 
-            ? `bg-gray-800/80 shadow-md ring-1 ring-white/5` 
-            : 'text-gray-500 hover:bg-white/[0.03] hover:text-gray-300'}
+            ? `bg-gray-800/80 shadow-md border border-gray-700` 
+            : 'text-gray-500 hover:bg-white/[0.03] hover:text-gray-300 border border-transparent'}
         `}
     >
         {isActive && (
@@ -265,7 +267,7 @@ const SidebarButton: React.FC<SidebarButtonProps> = ({ config, isActive, isProMo
 
 // Main App Component Content (Separated for context usage)
 const AppContent: React.FC = () => {
-  const { lang, setLang, t, isProMode } = useLanguage();
+  const { lang, setLang, t, isProMode, setIsProMode } = useLanguage();
   const { downloadModelOnly, progressVal: modelProgress, isLoading: modelLoading } = useGemma();
   
   const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | null>(null);
@@ -281,7 +283,6 @@ const AppContent: React.FC = () => {
   const [isSnowEnabled, setIsSnowEnabled] = useState(true);
   const [isZenMode, setIsZenMode] = useState(false);
   const [isZenControlsVisible, setIsZenControlsVisible] = useState(true);
-  const [isProModeInternal, setIsProMode] = useState(true); // Internal state for switch visualization, sync with context in real app
   
   // Offline State
   const [isOfflineReady, setIsOfflineReady] = useState(false);
@@ -552,7 +553,7 @@ const AppContent: React.FC = () => {
             </div>
           )}
 
-          <nav className="border-b border-white/[0.04] bg-[#0d0d0d]/80 backdrop-blur-md sticky top-0 z-50 shrink-0">
+          <nav className="border-b border-gray-800 bg-[#0d0d0d]/80 backdrop-blur-md sticky top-0 z-50 shrink-0">
             <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2 relative">
               <div className="flex items-center gap-3 cursor-pointer group shrink-0" onClick={() => handleToolClick(null)}>
                 <div className={`relative bg-gradient-to-br w-8 h-8 rounded-lg ${theme.logoShadow} flex items-center justify-center text-white overflow-hidden transition-all duration-500 ${theme.logoGradient} ${theme.logoHoverShadow}`}>
@@ -576,8 +577,8 @@ const AppContent: React.FC = () => {
                            <div className="space-y-3">
                               <span className="text-xs font-medium text-gray-400">{t('interface')}</span>
                               <div className="grid grid-cols-2 gap-2 bg-gray-900/50 p-1 rounded-xl border border-white/5">
-                                 <button onClick={() => setIsProMode(true)} className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${isProModeInternal ? 'bg-gray-800 text-indigo-400 shadow-sm ring-1 ring-white/5' : 'text-gray-500 hover:text-gray-300'}`}><Zap size={14} fill={isProModeInternal ? "currentColor" : "none"} /> {t('pro_mode')}</button>
-                                 <button onClick={() => setIsProMode(false)} className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${!isProModeInternal ? 'bg-gray-800 text-emerald-400 shadow-sm ring-1 ring-white/5' : 'text-gray-500 hover:text-gray-300'}`}><BookOpen size={14} /> {t('learner_mode')}</button>
+                                 <button onClick={() => setIsProMode(true)} className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${isProMode ? 'bg-gray-800 text-indigo-400 shadow-sm ring-1 ring-white/5' : 'text-gray-500 hover:text-gray-300'}`}><Zap size={14} fill={isProMode ? "currentColor" : "none"} /> {t('pro_mode')}</button>
+                                 <button onClick={() => setIsProMode(false)} className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${!isProMode ? 'bg-gray-800 text-emerald-400 shadow-sm ring-1 ring-white/5' : 'text-gray-500 hover:text-gray-300'}`}><BookOpen size={14} /> {t('learner_mode')}</button>
                               </div>
                            </div>
                            <div className="h-px bg-white/5"></div>
@@ -626,8 +627,8 @@ const AppContent: React.FC = () => {
                            </h1>
                            <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto font-medium leading-relaxed">{t('hero_desc')}</p>
                        </div>
-                       <button onClick={() => handleToolClick('merge')} className={`group relative flex items-center gap-5 px-10 py-5 bg-gray-900/50 hover:bg-gray-800/80 border border-white/10 rounded-full transition-all duration-500 hover:scale-105 backdrop-blur-md ${theme.buttonBorder} ${theme.buttonGlow}`}>
-                            <div className="flex flex-col items-start"><span className="text-sm font-bold text-gray-100 group-hover:text-white uppercase tracking-widest transition-colors">{t('open_workspace')}</span><span className={`text-[10px] text-gray-500 font-mono transition-colors ${theme.textAccentHover}`}>{t('access_tools')}</span></div>
+                       <button onClick={() => handleToolClick('dashboard')} className={`group relative flex items-center gap-5 px-10 py-5 bg-gray-900/50 hover:bg-gray-800/80 border border-white/10 rounded-full transition-all duration-500 hover:scale-105 backdrop-blur-md ${theme.buttonBorder} ${theme.buttonGlow}`}>
+                            <div className="flex flex-col items-start"><span className="text-sm font-bold text-gray-100 group-hover:text-white uppercase tracking-widest">{t('open_workspace')}</span><span className={`text-[10px] text-gray-500 font-mono transition-colors ${theme.textAccentHover}`}>{t('access_tools')}</span></div>
                             <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center transition-all shadow-lg group-hover:rotate-45 ${theme.buttonGradient} ${theme.buttonShadow}`}><ArrowRight size={22} className="text-white" /></div>
                        </button>
                        <div className="flex flex-wrap justify-center gap-3 opacity-50 hover:opacity-100 transition-opacity duration-500">
@@ -636,11 +637,21 @@ const AppContent: React.FC = () => {
                                 return (<div key={tool.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/5 bg-white/5 text-gray-400 text-[10px] font-medium select-none cursor-default hover:bg-white/10 hover:text-gray-200 transition-all hover:border-white/10"><Icon size={12} /><span className="tracking-wide">{tool.label}</span></div>)
                             })}
                        </div>
+                       
+                       <a 
+                          href="https://github.com/iuriivoloshyn/localdatatools.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-400 transition-colors mt-8"
+                       >
+                          <Github size={14} />
+                          <span>GitHub</span>
+                       </a>
                    </div>
               </div>
           ) : (
             <div key="dashboard" className={`flex flex-col md:flex-row max-w-[1920px] mx-auto w-full flex-1 md:overflow-hidden ${transitionClass}`}>
-                <aside className="w-full md:w-[240px] py-4 px-3 md:border-r border-white/[0.04] bg-[#0d0d0d] md:overflow-y-auto shrink-0 z-10 relative flex flex-col">
+                <aside className="w-full md:w-[240px] py-4 px-3 md:border-r border-gray-800 bg-[#0d0d0d] md:overflow-y-auto shrink-0 z-10 relative flex flex-col">
                   <div className="px-3 mb-3 flex items-center justify-between group">
                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{t('utilities')}</span>
                       <button onClick={() => setIsFeatureRequestOpen(true)} className="text-gray-600 hover:text-indigo-400 transition-colors p-1 rounded hover:bg-white/5" title="Request Features"><Lightbulb size={12} /></button>
@@ -648,20 +659,20 @@ const AppContent: React.FC = () => {
                   <nav className="space-y-1">
                      {TOOLS_LIST.map(tool => (
                        <React.Fragment key={tool.id}>
-                         {tool.id === 'chat' && <div className="my-2 mx-3 border-t border-white/[0.06]"></div>}
-                         {tool.id === 'merge' && <div className="my-2 mx-3 border-t border-white/[0.06]"></div>}
-                         <SidebarButton config={tool} isActive={activeTool === tool.id} isProMode={isProModeInternal} onClick={() => handleToolClick(tool.id)} t={t} />
+                         {tool.id === 'chat' && <div className="my-2 mx-3 border-t border-gray-800/50"></div>}
+                         {tool.id === 'merge' && <div className="my-2 mx-3 border-t border-gray-800/50"></div>}
+                         <SidebarButton config={tool} isActive={activeTool === tool.id} isProMode={isProMode} onClick={() => handleToolClick(tool.id)} t={t} />
                        </React.Fragment>
                      ))}
                   </nav>
-                  <div className="mt-auto pt-8 pb-6 px-3">
+                  <div className="mt-auto pt-8 pb-6 px-3 flex flex-col gap-6">
                     <div className="flex flex-col items-center gap-0 group opacity-80 hover:opacity-100 transition-all duration-300">
                         <span className="text-[5.5px] font-bold text-gray-500 uppercase tracking-[0.25em] text-center mb-0.5">Created by</span>
                         <a href="https://ivlabs.xyz" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-px font-mono text-sm bg-gray-900 border border-white/[0.06] px-4 py-2 rounded-xl transition-all ${theme.creatorBorder} ${theme.creatorShadow}`}><span className="text-gray-300 font-bold group-hover:text-white transition-colors">ivlabs</span><span className={`${theme.creatorAccent} font-bold`}>.xyz</span><span className={`w-1.5 h-3 rounded-[1px] ml-[1px] ${theme.creatorDot}`}></span></a>
                     </div>
                   </div>
                 </aside>
-                <main className="flex-1 px-4 py-6 md:p-8 md:overflow-y-auto overflow-x-hidden relative z-10 custom-scrollbar scroll-smooth bg-[#0d0d0d]" ref={mainContentRef}>
+                <main className="flex-1 px-4 py-6 md:p-8 md:overflow-y-auto overflow-x-hidden relative z-10 custom-scrollbar scroll-smooth" ref={mainContentRef}>
                   <div className="max-w-7xl mx-auto h-full">
                       <Suspense fallback={<ToolLoader />}>
                           {visitedTools.has('merge') && <div className={activeTool === 'merge' ? 'block h-full' : 'hidden h-full'}><MergeTool /></div>}
@@ -692,7 +703,7 @@ export const App: React.FC = () => {
 
   return (
     <GemmaProvider>
-      <AppContext.Provider value={{ lang, setLang, t, isProMode }}>
+      <AppContext.Provider value={{ lang, setLang, t, isProMode, setIsProMode }}>
         <AppContent />
       </AppContext.Provider>
     </GemmaProvider>

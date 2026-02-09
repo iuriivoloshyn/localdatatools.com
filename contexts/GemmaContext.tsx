@@ -1,7 +1,6 @@
 
 import React, { createContext, useContext, useState, useRef } from 'react';
 import { MLCEngine, CreateMLCEngine } from "@mlc-ai/web-llm";
-import { ChatMessage } from '../types';
 
 // CONFIGURATION
 const R2_FOLDER_NAME = 'gemma-2-2b-it-q4f16_1-MLC';
@@ -21,9 +20,6 @@ interface GemmaContextType {
   downloadModelOnly: () => Promise<void>;
   resetEngine: () => Promise<void>;
   getStats: () => string;
-  chatHistory: ChatMessage[];
-  addChatMessage: (msg: ChatMessage) => void;
-  clearChatHistory: () => void;
 }
 
 const GemmaContext = createContext<GemmaContextType>({} as GemmaContextType);
@@ -39,17 +35,6 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const engineRef = useRef<any>(null);
   const initializingRef = useRef(false);
   
-  // Chat Persistence
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-
-  const addChatMessage = (msg: ChatMessage) => {
-    setChatHistory(prev => [...prev, msg]);
-  };
-
-  const clearChatHistory = () => {
-    setChatHistory([]);
-  };
-
   const getStats = () => {
     if (!engineRef.current || !isModelLoaded) return "Engine not active.";
     try {
@@ -91,20 +76,6 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const modelBaseUrl = `${R2_DOMAIN}/${R2_FOLDER_NAME}/resolve/main/`;
         const wasmUrl = `${R2_DOMAIN}/${R2_FOLDER_NAME}/resolve/main/gemma-2-2b-it-q4f16_1-ctx4k_cs1k-webgpu.wasm`;
         
-        const appConfig = {
-            model_list: [
-                {
-                    "model_id": INTERNAL_MODEL_ID,
-                    "model": modelBaseUrl, 
-                    "model_lib": wasmUrl,
-                    "vram_required_MB": 3200,
-                    "low_resource_required": false,
-                    "required_features": ["shader-f16"]
-                }
-            ],
-            useIndexedDBCache: true 
-        };
-
         const initProgressCallback = (report: any) => {
             let unifiedProgress = 0;
             let userText = report.text;
@@ -125,7 +96,22 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         let currentEngine;
         
+        // Attempt 1: Try with Caching Enabled
         try {
+            const appConfig = {
+                model_list: [
+                    {
+                        "model_id": INTERNAL_MODEL_ID,
+                        "model": modelBaseUrl, 
+                        "model_lib": wasmUrl,
+                        "vram_required_MB": 3200,
+                        "low_resource_required": false,
+                        "required_features": ["shader-f16"]
+                    }
+                ],
+                useIndexedDBCache: true 
+            };
+
             currentEngine = await CreateMLCEngine(
                 INTERNAL_MODEL_ID,
                 {
@@ -134,21 +120,30 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 }
             );
         } catch (initError: any) {
-            // Handle race condition where DB might be closing from previous session
-            if (initError?.message?.includes("database connection is closing") || 
-                initError?.message?.includes("InvalidStateError")) {
-                console.warn("IDB connection error detected. Retrying initialization...", initError);
-                await new Promise(r => setTimeout(r, 1000));
-                currentEngine = await CreateMLCEngine(
-                    INTERNAL_MODEL_ID,
+            console.warn("Initial load failed, retrying without cache...", initError);
+            
+            // Attempt 2: Disable Caching (Fixes "Failed to store... Load failed" errors)
+            const appConfigNoCache = {
+                model_list: [
                     {
-                        appConfig,
-                        initProgressCallback
+                        "model_id": INTERNAL_MODEL_ID,
+                        "model": modelBaseUrl, 
+                        "model_lib": wasmUrl,
+                        "vram_required_MB": 3200,
+                        "low_resource_required": false,
+                        "required_features": ["shader-f16"]
                     }
-                );
-            } else {
-                throw initError;
-            }
+                ],
+                useIndexedDBCache: false 
+            };
+
+            currentEngine = await CreateMLCEngine(
+                INTERNAL_MODEL_ID,
+                {
+                    appConfig: appConfigNoCache,
+                    initProgressCallback
+                }
+            );
         }
         
         if (signalLoaded) {
@@ -166,6 +161,7 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
 
     } catch (err: any) {
+         console.error("Gemma Fatal Error", err);
          setError(err.message || "Gemma initialization failed");
          setIsModelLoaded(false);
          throw err;
@@ -186,7 +182,7 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   return (
-    <GemmaContext.Provider value={{ engine, isModelLoaded, isLoading, progress, progressVal, error, initGemma, downloadModelOnly, resetEngine, getStats, chatHistory, addChatMessage, clearChatHistory }}>
+    <GemmaContext.Provider value={{ engine, isModelLoaded, isLoading, progress, progressVal, error, initGemma, downloadModelOnly, resetEngine, getStats }}>
       {children}
     </GemmaContext.Provider>
   );

@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -17,7 +16,7 @@
     <title>Local Data Tools</title>
     
     <!-- Icons & Manifest -->
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20width%3D%22192%22%20height%3D%22192%22%20viewBox%3D%220%200%20192%20192%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%22192%22%20height%3D%22192%22%20rx%3D%2242%22%20fill%3D%22url(%23gradient)%22%2F%3E%3Cg%20transform%3D%22translate(24%2C%2024)%20scale(6)%22%3E%3Cellipse%20cx%3D%2212%22%20cy%3D%225%22%20rx%3D%229%22%20ry%3D%223%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M21%2012c0%201.66-4%203-9%203s-9-1.34-9-3%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M3%205v14c0%201.66%204%203%209%203s9-1.34%209-3V5%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fg%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22gradient%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%22192%22%20y2%3D%22192%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%236366f1%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%237c3aed%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3C%2Fsvg%3E" type="image/svg+xml">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20width%3D%22192%22%20height%3D%22192%22%20viewBox%3D%220%200%20192%20192%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Crect%20width%3D%22192%22%20height%3D%22192%22%20rx%3D%2242%22%20fill%3D%22url(%23gradient)%22%2F%3E%3Cg%20transform%3D%22translate(24%2C%2024)%20scale(6)%22%3E%3Cellipse%20cx%3D%2212%22%20cy%3D%225%22%20rx%3D%229%22%20ry%3D%223%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M21%2012c0%201.66-4%203-9%203s-9-1.34-9-3%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3Cpath%20d%3D%22M3%205v14c0%201.66 4 3 9 3s9-1.34 9-3V5%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fg%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22gradient%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%22192%22%20y2%3D%22192%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%236366f1%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%237c3aed%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3C%2Fsvg%3E" type="image/svg+xml">
     <link rel="apple-touch-icon" href="favicon.svg">
     <link rel="manifest" href="manifest.json">
     
@@ -203,6 +202,10 @@
         }
       }
     </style>
+  
+  <!-- Load heic2any globally via CDN to ensure WASM loading works correctly -->
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+  
   <script type="importmap">
 {
   "imports": {
@@ -224,7 +227,12 @@
     "exifr": "https://esm.sh/exifr@7.1.3",
     "browser-image-compression": "https://esm.sh/browser-image-compression@2.0.2",
     "fflate": "https://esm.sh/fflate@0.8.2",
-    "react-dom": "https://esm.sh/react-dom@^19.2.3"
+    "react-dom": "https://esm.sh/react-dom@^19.2.3",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "path": "https://esm.sh/path@^0.12.7",
+    "url": "https://esm.sh/url@^0.11.4",
+    "heic2any": "https://esm.sh/heic2any@^0.0.4"
   }
 }
 </script>

@@ -25,7 +25,8 @@
     "@mlc-ai/web-llm": "0.2.80",
     "exifr": "7.1.3",
     "browser-image-compression": "2.0.2",
-    "fflate": "0.8.2"
+    "fflate": "0.8.2",
+    "heic2any": "0.0.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

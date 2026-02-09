@@ -205,7 +205,8 @@ const FileUploader: React.FC<FileUploaderProps> = ({
               <Upload size={24} />
             </div>
             <p className="text-gray-300 font-medium text-sm sm:text-base">{t('upload_default')}</p>
-            <p className="text-xs text-gray-500 mt-2 max-w-[200px] leading-relaxed">
+            {/* Increased max-width to allow longer format descriptions to fit on one line */}
+            <p className="text-xs text-gray-500 mt-2 max-w-[300px] leading-relaxed">
               {limitText || t('upload_limit_info')}
             </p>
           </div>

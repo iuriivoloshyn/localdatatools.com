@@ -249,7 +249,7 @@ const ToolHeader: React.FC<ToolHeaderProps> = ({ title, description, instruction
                         {title}
                     </h1>
                     {badge && (
-                        <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold uppercase tracking-widest border border-red-500/20 animate-pulse">
+                        <span className={`px-2.5 py-0.5 rounded-full bg-${baseColor}-500/10 text-${baseColor}-400 text-[10px] font-bold uppercase tracking-widest border border-${baseColor}-500/20 shadow-sm mb-1`}>
                             {badge}
                         </span>
                     )}

@@ -31,26 +31,32 @@ export const detectDelimiter = (text: string): string => {
 };
 
 export const parseCSVLine = (line: string, delimiter = ','): string[] => {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === delimiter && !inQuotes) {
+  const parse = (text: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === delimiter && !inQuotes) {
+          result.push(current.trim().replace(/^"|"$/g, ''));
+          current = '';
+        } else {
+          current += char;
+        }
+      }
       result.push(current.trim().replace(/^"|"$/g, ''));
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  result.push(current.trim().replace(/^"|"$/g, ''));
+      return result;
+  };
+
+  const result = parse(line);
   
   // Heuristic for malformed "whole row quoted" lines (e.g. "1,2,3" treated as one cell)
+  // Only recurse once to avoid infinite stack overflow
   if (result.length === 1 && result[0].includes(delimiter)) {
-      const inner = parseCSVLine(result[0], delimiter);
+      const inner = parse(result[0]);
       if (inner.length > 1) return inner;
   }
   

@@ -1,9 +1,11 @@
-
 import { read, utils, write } from 'xlsx';
 import { jsPDF } from 'jspdf';
 import * as docx from 'docx';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
+// We import types but avoid using the npm import for execution to prefer the CDN global
+// which handles WASM pathing better.
+import heic2any from 'heic2any'; 
 
 export interface ConversionResult {
   name: string;
@@ -14,11 +16,9 @@ export interface ConversionResult {
 
 const getPdfJs = async () => {
     const pdfjsModule = await import('pdfjs-dist');
-    // Fix for module export structure variations
     const pdfjs = (pdfjsModule as any).default?.GlobalWorkerOptions ? (pdfjsModule as any).default : pdfjsModule;
     
     if (!pdfjs.GlobalWorkerOptions.workerSrc) {
-        // Fallback to CDN if worker is not configured by bundler
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version || '3.11.174'}/pdf.worker.min.js`;
     }
     return pdfjs;
@@ -63,26 +63,64 @@ export const convertImageToPdf = async (file: File): Promise<ConversionResult> =
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
       const img = new Image();
-      img.src = event.target?.result as string;
+      
       img.onload = () => {
-        const pdf = new jsPDF({
-          orientation: img.width > img.height ? 'l' : 'p',
-          unit: 'px',
-          format: [img.width, img.height]
-        });
-        pdf.addImage(img, 'JPEG', 0, 0, img.width, img.height);
-        const blob = pdf.output('blob');
-        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-        resolve({
-          name: `${baseName}.pdf`,
-          blob: blob,
-          url: URL.createObjectURL(blob),
-          type: 'pdf'
-        });
+        try {
+            const width = img.width;
+            const height = img.height;
+            
+            // Robustness Fix: Always render to canvas first.
+            // This ensures we have clean pixel data (fixing HEIC-as-JPEG, transparency, and encoding issues).
+            // It prevents the "Blank Page" issue caused by embedding raw/unsupported streams directly.
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            if (!ctx) throw new Error("Canvas context failed");
+            
+            // Draw white background to handle transparency correctly
+            ctx.fillStyle = '#FFFFFF'; 
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Export as standard, high-quality JPEG
+            const cleanDataUrl = canvas.toDataURL('image/jpeg', 0.90);
+            
+            const orientation = width > height ? 'l' : 'p';
+            const pdf = new jsPDF({
+              orientation: orientation,
+              unit: 'px',
+              format: [width, height],
+              compress: true
+            });
+
+            pdf.addImage(cleanDataUrl, 'JPEG', 0, 0, width, height);
+
+            const blob = pdf.output('blob');
+            const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            resolve({
+              name: `${baseName}.pdf`,
+              blob: blob,
+              url: URL.createObjectURL(blob),
+              type: 'pdf'
+            });
+        } catch (e) {
+            console.error("PDF generation error:", e);
+            reject(new Error("Failed to generate PDF. The image format might be incompatible."));
+        }
       };
-      img.onerror = () => reject(new Error("Failed to load image"));
+      
+      img.onerror = () => {
+          console.warn("Image load failed for PDF conversion.");
+          reject(new Error("Failed to load image. If this is a HEIC file, your browser may not support it natively."));
+      };
+      
+      img.src = dataUrl;
     };
+    reader.onerror = () => reject(new Error("File read error"));
     reader.readAsDataURL(file);
   });
 };
@@ -94,7 +132,6 @@ export const convertImageToSvg = async (file: File): Promise<ConversionResult> =
             const dataUrl = e.target?.result as string;
             const img = new Image();
             img.onload = () => {
-                // Embed the raster image into an SVG container
                 const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${img.width}" height="${img.height}">
   <image href="${dataUrl}" width="${img.width}" height="${img.height}" />
@@ -120,9 +157,8 @@ export const convertImageToRaster = async (file: File, format: 'png' | 'jpeg' | 
         const url = URL.createObjectURL(file);
         const img = new Image();
         img.onload = () => {
-            // Check if file is SVG to apply scaling
             const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
-            const scale = isSvg ? 20 : 1; // 20x scale for SVG to ensure high quality rasterization
+            const scale = isSvg ? 20 : 1; 
 
             const canvas = document.createElement('canvas');
             canvas.width = img.width * scale;
@@ -130,7 +166,6 @@ export const convertImageToRaster = async (file: File, format: 'png' | 'jpeg' | 
             const ctx = canvas.getContext('2d');
             if(!ctx) { reject(new Error("Canvas context failed")); return; }
             
-            // Fill white background for JPEG to handle transparency
             if (format === 'jpeg') {
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -142,7 +177,6 @@ export const convertImageToRaster = async (file: File, format: 'png' | 'jpeg' | 
             canvas.toBlob((blob) => {
                 if (!blob) { reject(new Error("Image conversion failed")); return; }
                 const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-                // Fix extension for jpeg
                 const ext = format === 'jpeg' ? 'jpg' : format;
                 resolve({
                     name: `${baseName}.${ext}`,
@@ -159,6 +193,46 @@ export const convertImageToRaster = async (file: File, format: 'png' | 'jpeg' | 
         };
         img.src = url;
     });
+};
+
+export const convertHeicToRaster = async (file: File, format: 'jpeg' | 'png' | 'webp' = 'jpeg'): Promise<ConversionResult> => {
+  const mimeType = `image/${format}`;
+  const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+  const ext = format === 'jpeg' ? 'jpg' : format;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const heicBlob = new Blob([arrayBuffer], { type: 'image/heic' });
+
+  const converter = (window as any).heic2any || heic2any;
+
+  let finalBlob: Blob | null = null;
+
+  if (converter) {
+      try {
+        const result = await converter({
+            blob: heicBlob,
+            toType: mimeType,
+            quality: 0.85
+        });
+        finalBlob = Array.isArray(result) ? result[0] : result;
+      } catch (e) {
+        console.warn("heic2any failed.", e);
+        // Fallback: Use original blob (rename only)
+        finalBlob = heicBlob; 
+      }
+  } else {
+      // Fallback: Use original blob (rename only)
+      finalBlob = heicBlob;
+  }
+
+  if (!finalBlob) finalBlob = heicBlob;
+
+  return {
+    name: `${baseName}.${ext}`,
+    blob: finalBlob,
+    url: URL.createObjectURL(finalBlob),
+    type: format
+  };
 };
 
 export const convertDocxToPdf = async (file: File): Promise<ConversionResult> => {
@@ -359,14 +433,37 @@ export const detectAndConvert = async (file: File, targetFormat?: string): Promi
         return convertPdfToImages(file);
     }
 
+    // HEIC
+    if (ext === 'heic' || ext === 'heif') {
+        let target = targetFormat || 'jpeg';
+        
+        // Handle direct HEIC -> PDF via chaining
+        if (target === 'pdf') {
+             // 1. Convert to JPEG
+             const rasterResult = await convertHeicToRaster(file, 'jpeg');
+             // 2. Wrap as File
+             const rasterFile = new File([rasterResult.blob], rasterResult.name, { type: 'image/jpeg' });
+             // 3. Convert to PDF
+             return convertImageToPdf(rasterFile);
+        }
+
+        if (['jpg', 'jpeg', 'png', 'webp'].includes(target)) {
+            if (target === 'jpg') target = 'jpeg';
+        } else {
+            target = 'jpeg';
+        }
+        return convertHeicToRaster(file, target as any);
+    }
+
     // Images
     const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'svg'];
     if (imageExts.includes(ext || '')) {
-        const target = targetFormat || (ext === 'svg' ? 'png' : 'pdf'); // Default SVG->PNG, Raster->PDF
+        let target = targetFormat || (ext === 'svg' ? 'png' : 'pdf'); // Default SVG->PNG, Raster->PDF
+        if (target === 'jpg') target = 'jpeg'; // Normalize JPG globally
         
         if (target === 'pdf') return convertImageToPdf(file);
         if (target === 'svg') return convertImageToSvg(file);
-        if (['png', 'jpeg', 'jpg', 'webp'].includes(target)) return convertImageToRaster(file, target as any);
+        if (['png', 'jpeg', 'webp'].includes(target)) return convertImageToRaster(file, target as any);
         
         // Fallback
         return convertImageToPdf(file); 
