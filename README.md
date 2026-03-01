@@ -12,7 +12,7 @@ Local Data Tools is a powerful web application designed for data professionals w
 - **CSV Diff**: Compare two datasets to identify added, removed, or modified rows instantly.
 - **Smart CSV Editor**: Use natural language instructions (powered by local Gemma 2 AI) to clean and transform data.
 - **Image to Text (OCR)**: Extract text from images and screenshots using Tesseract.js.
-- **Converter**: Convert between CSV, Excel, PDF, DOCX, and Image formats.
+- **Converter**: Convert between CSV, Excel, PDF, DOCX, Image, and Audio formats (MP3, WAV, FLAC, AAC, OGG, WebM, WMA) using FFmpeg WebAssembly.
 - **File Viewer**: Securely preview spreadsheets, documents, and code files locally.
 - **Anonymizer**: Sanitize sensitive columns with reversible logic and generate a restoration key.
 - **Metadata & Hash**: View EXIF data, hidden metadata, and scramble file hashes for privacy.
@@ -28,6 +28,7 @@ Local Data Tools is a powerful web application designed for data professionals w
 - **Frontend**: React 19, TypeScript, Tailwind CSS
 - **AI/ML**: WebLLM (@mlc-ai/web-llm), Tesseract.js
 - **Data Processing**: SheetJS (XLSX), PapaParse (custom implementation), Diff engines
+- **Media Processing**: FFmpeg WebAssembly (@ffmpeg/ffmpeg)
 - **Rendering**: PDF.js, Mammoth.js, html2canvas
 - **UI Components**: Lucide React, Custom Glassmorphism UI
 

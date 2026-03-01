@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ToolHeader from '../layout/ToolHeader';
 import FileUploader from '../FileUploader';
-import { RefreshCw, Upload, Download, FileSpreadsheet, FileText, ArrowRight, Loader2, AlertCircle, FileType, Image as ImageIcon, Trash2, X, Plus, Archive, ChevronDown } from 'lucide-react';
+import { RefreshCw, Upload, Download, FileSpreadsheet, FileText, ArrowRight, Loader2, AlertCircle, FileType, Image as ImageIcon, Trash2, X, Plus, Archive, ChevronDown, Music } from 'lucide-react';
 import { useLanguage } from '../../App';
 import { detectAndConvert, ConversionResult } from '../../utils/converterHelpers';
 import { countFileLines } from '../../utils/csvHelpers';
@@ -41,10 +41,16 @@ const ConverterTool: React.FC = () => {
       return ['jpg', 'jpeg', 'png', 'webp', 'svg', 'heic'].includes(ext);
   }
 
+  const isAudio = (name: string) => {
+      const ext = name.split('.').pop()?.toLowerCase() || '';
+      return ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm', 'wma'].includes(ext);
+  }
+
   // --- Master Switch Logic ---
 
   const hasImagesInQueue = queue.some(q => isImage(q.file.name));
   const hasPdfsInQueue = queue.some(q => q.file.name.toLowerCase().endsWith('.pdf'));
+  const hasAudioInQueue = queue.some(q => isAudio(q.file.name));
 
   // Image Master State
   const displayMasterImageFormat = useMemo(() => {
@@ -68,6 +74,17 @@ const ConverterTool: React.FC = () => {
       return allSame ? firstFmt : '';
   }, [queue]);
 
+  // Audio Master State
+  const displayMasterAudioFormat = useMemo(() => {
+      const pendingAudio = queue.filter(q => q.status === 'idle' && isAudio(q.file.name));
+      if (pendingAudio.length === 0) return '';
+      
+      const firstFmt = pendingAudio[0].targetFormat;
+      const allSame = pendingAudio.every(item => item.targetFormat === firstFmt);
+      
+      return allSame ? firstFmt : '';
+  }, [queue]);
+
   const addToQueue = (files: File[]) => {
       if (!files) return;
       const newItems: QueueItem[] = files.map(f => {
@@ -86,6 +103,8 @@ const ConverterTool: React.FC = () => {
                   if (ext === 'heic') target = 'jpg'; // Override HEIC default to JPG
                   if (ext === 'svg') target = 'png';
               }
+          } else if (isAudio(f.name)) {
+              target = 'mp3'; // Default audio target
           } else {
               // Document defaults
               if (ext === 'pdf') target = 'image';
@@ -189,12 +208,23 @@ const ConverterTool: React.FC = () => {
       }));
   };
 
+  const handleMasterAudioChange = (format: string) => {
+      if (!format) return;
+      setQueue(prev => prev.map(item => {
+          if (item.status === 'idle' && isAudio(item.file.name)) {
+              return { ...item, targetFormat: format };
+          }
+          return item;
+      }));
+  };
+
   const getIconForFile = (name: string) => {
       const ext = name.split('.').pop()?.toLowerCase();
       if (['xlsx', 'csv', 'xls'].includes(ext || '')) return <FileSpreadsheet size={20} className="text-green-400" />;
       if (['pdf'].includes(ext || '')) return <FileText size={20} className="text-red-400" />;
       if (['docx'].includes(ext || '')) return <FileText size={20} className="text-blue-400" />;
       if (['jpg', 'png', 'jpeg', 'webp', 'svg', 'heic'].includes(ext || '')) return <ImageIcon size={20} className="text-purple-400" />;
+      if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm', 'wma'].includes(ext || '')) return <Music size={20} className="text-yellow-400" />;
       return <FileText size={20} className="text-gray-400" />;
   };
 
@@ -204,10 +234,10 @@ const ConverterTool: React.FC = () => {
     <div className="space-y-6">
       <ToolHeader 
         title="File Converter"
-        description="Universal format transformation engine. Convert spreadsheets, documents, and images (including HEIC/SVG/PNG/JPG) entirely in your browser."
+        description="Universal format transformation engine. Convert spreadsheets, documents, images, and audio entirely in your browser."
         instructions={[
-          "Drag & Drop files (CSV, XLSX, PDF, DOCX, Images, HEIC, SVG)",
-          "For Images & PDFs, select your desired output format",
+          "Drag & Drop files (CSV, XLSX, PDF, DOCX, Images, Audio)",
+          "For Images, PDFs, & Audio, select your desired output format",
           "Use the master switch in the queue to update all files at once",
           "Download results individually or as a ZIP archive"
         ]}
@@ -222,8 +252,8 @@ const ConverterTool: React.FC = () => {
             multiple={true}
             disabled={isProcessing}
             theme="green"
-            limitText="Spreadsheets, Docs, Images (incl HEIC), PDF"
-            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic"
+            limitText="Spreadsheets, Docs, Images, Audio, PDF"
+            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .webm, .wma"
         />
 
         {queue.length > 0 && (
@@ -269,6 +299,27 @@ const ConverterTool: React.FC = () => {
                                 </div>
                             </div>
                         )}
+
+                        {hasAudioInQueue && (
+                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 pl-4 border-l border-gray-800">
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest hidden sm:inline">Audio:</span>
+                                <div className="relative group">
+                                    <select 
+                                        onChange={(e) => handleMasterAudioChange(e.target.value)}
+                                        value={displayMasterAudioFormat || ''}
+                                        className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-[10px] font-bold text-yellow-400 focus:outline-none appearance-none pr-6 cursor-pointer hover:border-yellow-500/50 transition-colors uppercase tracking-wide min-w-[80px]"
+                                    >
+                                        <option value="" className="text-gray-500">Mixed</option>
+                                        <option value="mp3">To MP3</option>
+                                        <option value="wav">To WAV</option>
+                                        <option value="flac">To FLAC</option>
+                                        <option value="aac">To AAC</option>
+                                        <option value="ogg">To OGG</option>
+                                    </select>
+                                    <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none group-hover:text-yellow-400 transition-colors" />
+                                </div>
+                            </div>
+                        )}
                     </div>
                     
                     <div className="flex gap-1 ml-auto">
@@ -294,7 +345,7 @@ const ConverterTool: React.FC = () => {
                             ref={fileInputRef} 
                             className="hidden" 
                             multiple
-                            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic"
+                            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .webm, .wma"
                             onChange={(e) => {if (e.target.files) addToQueue(Array.from(e.target.files))}}
                             disabled={isProcessing}
                         />
@@ -327,6 +378,24 @@ const ConverterTool: React.FC = () => {
                                                     className={`text-[10px] px-2 py-1 rounded border uppercase transition-colors 
                                                         ${item.targetFormat === fmt || (fmt === 'jpg' && item.targetFormat === 'jpeg') 
                                                             ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 font-bold shadow-sm shadow-purple-900/20' 
+                                                            : 'border-gray-700 text-gray-500 hover:text-gray-300 hover:bg-gray-800'}`}
+                                                >
+                                                    {fmt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Audio Options */}
+                                    {isAudio(item.file.name) && item.status === 'idle' && (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {['mp3', 'wav', 'flac', 'aac', 'ogg', 'webm', 'wma'].map(fmt => (
+                                                <button 
+                                                    key={fmt}
+                                                    onClick={() => setItemTarget(item.id, fmt)} 
+                                                    className={`text-[10px] px-2 py-1 rounded border uppercase transition-colors 
+                                                        ${item.targetFormat === fmt
+                                                            ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-300 font-bold shadow-sm shadow-yellow-900/20' 
                                                             : 'border-gray-700 text-gray-500 hover:text-gray-300 hover:bg-gray-800'}`}
                                                 >
                                                     {fmt}

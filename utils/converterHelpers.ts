@@ -6,6 +6,11 @@ import JSZip from 'jszip';
 // We import types but avoid using the npm import for execution to prefer the CDN global
 // which handles WASM pathing better.
 import heic2any from 'heic2any'; 
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
+import coreURL from '@ffmpeg/core?url';
+import wasmURL from '@ffmpeg/core/wasm?url';
+import workerURL from '@ffmpeg/ffmpeg/worker?url';
 
 export interface ConversionResult {
   name: string;
@@ -417,6 +422,95 @@ export const convertPdfToDocx = async (file: File): Promise<ConversionResult> =>
     };
 };
 
+let ffmpegInstance: FFmpeg | null = null;
+
+const getFFmpeg = async () => {
+    if (ffmpegInstance) return ffmpegInstance;
+    console.log('[FFmpeg] Initializing new instance...');
+    ffmpegInstance = new FFmpeg();
+    
+    ffmpegInstance.on('log', ({ message }) => {
+        console.log('[FFmpeg]', message);
+    });
+    
+    ffmpegInstance.on('progress', ({ progress, time }) => {
+        console.log('[FFmpeg Progress]', progress, time);
+    });
+
+    console.log('[FFmpeg] Loading core and wasm from local assets');
+    await ffmpegInstance.load({
+        coreURL,
+        wasmURL,
+        classWorkerURL: workerURL,
+    });
+    console.log('[FFmpeg] Load complete.');
+    return ffmpegInstance;
+};
+
+export const convertAudio = async (file: File, targetFormat: string): Promise<ConversionResult> => {
+    console.log(`[convertAudio] Starting conversion of ${file.name} to ${targetFormat}`);
+    const ffmpeg = await getFFmpeg();
+    const inputName = `input_${Date.now()}.${file.name.split('.').pop()}`;
+    const outputName = `output_${Date.now()}.${targetFormat}`;
+    
+    console.log(`[convertAudio] Writing file ${inputName} to virtual FS...`);
+    await ffmpeg.writeFile(inputName, await fetchFile(file));
+    console.log(`[convertAudio] File written.`);
+    
+    let args: string[] = ['-y', '-i', inputName];
+    
+    switch (targetFormat) {
+        case 'mp3':
+            args.push('-c:a', 'libmp3lame', '-q:a', '2');
+            break;
+        case 'wav':
+            args.push('-c:a', 'pcm_s16le');
+            break;
+        case 'flac':
+            args.push('-c:a', 'flac');
+            break;
+        case 'aac':
+        case 'm4a':
+            args.push('-c:a', 'aac', '-b:a', '192k');
+            break;
+        case 'ogg':
+            args.push('-c:a', 'libvorbis', '-q:a', '4');
+            break;
+        case 'webm':
+            args.push('-c:a', 'libopus', '-b:a', '96k');
+            break;
+        case 'wma':
+            args.push('-c:a', 'wmav2', '-b:a', '192k');
+            break;
+        default:
+            args.push('-c:a', 'copy');
+    }
+    
+    args.push(outputName);
+    
+    console.log(`[convertAudio] Executing ffmpeg with args:`, args);
+    await ffmpeg.exec(args);
+    console.log(`[convertAudio] Execution complete.`);
+    
+    console.log(`[convertAudio] Reading output file ${outputName}...`);
+    const data = await ffmpeg.readFile(outputName);
+    const blob = new Blob([data], { type: `audio/${targetFormat}` });
+    
+    const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+    
+    console.log(`[convertAudio] Cleaning up virtual FS...`);
+    await ffmpeg.deleteFile(inputName);
+    await ffmpeg.deleteFile(outputName);
+    
+    console.log(`[convertAudio] Conversion finished successfully.`);
+    return {
+        name: `${baseName}.${targetFormat}`,
+        blob: blob,
+        url: URL.createObjectURL(blob),
+        type: targetFormat
+    };
+};
+
 export const detectAndConvert = async (file: File, targetFormat?: string): Promise<ConversionResult> => {
     const ext = file.name.split('.').pop()?.toLowerCase();
     
@@ -467,6 +561,22 @@ export const detectAndConvert = async (file: File, targetFormat?: string): Promi
         
         // Fallback
         return convertImageToPdf(file); 
+    }
+    
+    // Audio
+    const audioExts = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm', 'wma'];
+    if (audioExts.includes(ext || '')) {
+        let target = targetFormat || 'mp3';
+        if (target === ext) {
+            // If same format, just return the original file
+            return {
+                name: file.name,
+                blob: file,
+                url: URL.createObjectURL(file),
+                type: target
+            };
+        }
+        return convertAudio(file, target);
     }
     
     throw new Error(`Unsupported file type: .${ext}`);
