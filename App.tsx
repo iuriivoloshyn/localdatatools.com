@@ -284,7 +284,7 @@ const AppContent: React.FC = () => {
 
   const getToolFromPath = (): ToolType | 'dashboard' | 'api-docs' | null => {
     const slug = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
-    if (slug === 'api-docs') return 'api-docs';
+    if (slug === 'api-docs' || slug.startsWith('api-docs/')) return 'api-docs';
     return slug ? (TOOL_SLUGS[slug] || null) : null;
   };
 
