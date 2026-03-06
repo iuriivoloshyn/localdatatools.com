@@ -12,7 +12,6 @@ const OPENAPI_SPEC = {
   },
   servers: [
     { url: 'https://localdatatools-api-674880939500.us-south1.run.app', description: 'Production' },
-    { url: 'http://localhost:4000', description: 'Local development' },
   ],
   security: [{ apiKey: [] }],
   components: {
@@ -201,6 +200,12 @@ docsRoutes.get('/', (c) => {
 <html><head>
   <title>LocalDataTools API Docs</title>
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { background: #0a0a0a; }
+    .swagger-ui { max-width: 960px; margin: 0 auto; }
+    .swagger-ui .topbar { display: none; }
+    .swagger-ui .info { margin: 30px 0; }
+  </style>
 </head><body>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
