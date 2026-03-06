@@ -7,7 +7,7 @@ const NAV_SECTIONS = [
   {
     group: 'Getting Started',
     items: [
-      { id: 'quick-start', label: 'Quick Start' },
+      { id: 'overview', label: 'Overview' },
       { id: 'authentication', label: 'Authentication' },
     ],
   },
@@ -181,7 +181,7 @@ const KeyGenerator = ({ onKeyGenerated }: { onKeyGenerated: (key: string) => voi
 };
 
 const ApiDocs: React.FC = () => {
-  const [activeSection, setActiveSection] = useState('quick-start');
+  const [activeSection, setActiveSection] = useState('overview');
   const [generatedKey, setGeneratedKey] = useState('');
 
   const k = (code: string) => generatedKey ? code.replace(/your-api-key|your-key/g, generatedKey) : code;
@@ -237,8 +237,8 @@ const ApiDocs: React.FC = () => {
       {/* Content */}
       <div className="flex-1 min-w-0 space-y-20">
 
-        {/* ───────── QUICK START ───────── */}
-        <section id="quick-start" className="scroll-mt-24 space-y-5">
+        {/* ───────── OVERVIEW ───────── */}
+        <section id="overview" className="scroll-mt-24 space-y-5">
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
@@ -266,10 +266,6 @@ const ApiDocs: React.FC = () => {
               </div>
             ))}
           </div>
-
-          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
-  -F "files=@file1.csv" -F "files=@file2.csv" \\
-  ${API_BASE}/v1/csv/merge > merged.csv`)}</CodeBlock>
         </section>
 
         <SectionDivider />
