@@ -16,7 +16,7 @@ const NAV_SECTIONS = [
     items: [
       { id: 'csv-merge-join', label: 'Merge & Join' },
       { id: 'csv-compare', label: 'Compare' },
-      { id: 'csv-anonymize', label: 'Anonymize' },
+      { id: 'csv-anonymize', label: 'Anonymize & Restore' },
     ],
   },
   {
@@ -177,7 +177,7 @@ const KeyGenerator = ({ onKeyGenerated }: { onKeyGenerated: (key: string) => voi
 const OverviewPage = () => (
   <div className="space-y-6">
     <div className="space-y-4">
-      <h1 className="text-3xl font-black text-white">API Reference</h1>
+      <h1 className="text-3xl font-black text-white">Overview</h1>
       <p className="text-gray-400 text-lg max-w-2xl leading-relaxed">
         The Local Data Tools API lets you process files programmatically — merge CSVs, convert between formats (images, audio, documents, spreadsheets), compress files, and anonymize data. All processing happens server-side with no data retained after the response.
       </p>
@@ -186,8 +186,17 @@ const OverviewPage = () => (
     <div className="space-y-3">
       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">How it works</p>
       <p className="text-gray-400 text-sm leading-relaxed">
-        Upload files via <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">multipart/form-data</code>, get results back — either as a downloadable file (CSV, XLSX, PNG, MP3, etc.) or JSON metadata. Authenticate with an API key in the <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">X-API-Key</code> header.
+        Send your files as a standard file upload (the same way an HTML form sends files) to any endpoint, and get back either a processed file (CSV, XLSX, PNG, MP3, etc.) or JSON metadata. Every request needs an API key in the <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">X-API-Key</code> header.
       </p>
+    </div>
+
+    <div className="space-y-3">
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Example request</p>
+      <CodeBlock>{`curl -X POST ${API_BASE}/v1/convert/image \\
+  -H "X-API-Key: YOUR_API_KEY" \\
+  -F "file=@photo.png" \\
+  -F "format=webp"`}</CodeBlock>
+      <p className="text-gray-500 text-xs">The <code className="text-gray-400">-F</code> flag sends each field as a file upload. All endpoints accept files this way.</p>
     </div>
 
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -205,7 +214,7 @@ const OverviewPage = () => (
       </div>
       <div className="bg-gray-900/50 border border-white/[0.06] rounded-xl p-4">
         <p className="text-white font-bold text-xs mb-1">Endpoints</p>
-        <p className="text-gray-400 text-xs">14 across CSV, conversion, compression</p>
+        <p className="text-gray-400 text-xs">15 across CSV, conversion, compression</p>
       </div>
     </div>
 
@@ -375,27 +384,85 @@ const CsvComparePage = ({ k }: { k: (s: string) => string }) => (
 );
 
 const CsvAnonymizePage = ({ k }: { k: (s: string) => string }) => (
-  <div className="space-y-5">
-    <h1 className="text-3xl font-black text-white">CSV Anonymize</h1>
-    <p className="text-gray-400">Auto-detect and mask PII — emails, phones, names, SSNs, addresses.</p>
-    <Endpoint method="POST" path="/v1/csv/anonymize" responseType="csv" />
-    <ParamTable params={[
-      { name: 'file', type: 'file', required: true, desc: 'CSV file with PII data' },
-      { name: 'columns', type: 'string', desc: 'Comma-separated column names (auto-detect if omitted)' },
-      { name: 'mode', type: 'string', desc: 'mask (default) — partial masking, or redact — full replacement' },
-    ]} />
-    <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
-  -F "file=@users.csv" -F "mode=mask" \\
-  ${API_BASE}/v1/csv/anonymize > anonymized.csv`)}</CodeBlock>
-    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Output</p>
-    <CodeBlock>{`# mode=mask
-alice@test.com → a***@test.com
-555-123-4567   → 5**********7
-Alice Smith    → A***e S***h
+  <div className="space-y-12">
+    <div className="space-y-4">
+      <h1 className="text-3xl font-black text-white">Anonymize & Restore</h1>
+      <p className="text-gray-400">Replace sensitive values with random pseudonyms, then restore them later using the generated key file. Choose per column: map to a category (animals, cities, etc.), shuffle values, or keep as-is.</p>
+    </div>
 
-# mode=redact
-alice@test.com → [REDACTED]
-555-123-4567   → [REDACTED]`}</CodeBlock>
+    {/* Anonymize */}
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-white border-b border-white/[0.06] pb-3">Anonymize</h2>
+      <p className="text-gray-400 text-sm">Upload a CSV and a JSON config specifying what to do with each column. Returns a ZIP containing the anonymized CSV and a key file for later restoration.</p>
+      <Endpoint method="POST" path="/v1/csv/anonymize" responseType="file" />
+      <ParamTable params={[
+        { name: 'file', type: 'file', required: true, desc: 'CSV file to anonymize' },
+        { name: 'config', type: 'string', required: true, desc: 'JSON object mapping column names to actions (see below)' },
+      ]} />
+      <div className="space-y-2">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Config format</p>
+        <p className="text-gray-400 text-sm">Each column can have an <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">action</code>: <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">map</code>, <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">shuffle</code>, or <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">keep</code>.</p>
+        <CodeBlock>{`{
+  "name": {
+    "action": "map",        // replace with pseudonyms
+    "category": "animals",  // colors, animals, fruits, cities, tech, nato
+    "rename": "subject"     // optional: rename column header
+  },
+  "email": {
+    "action": "map",
+    "category": "tech"
+  },
+  "age": {
+    "action": "shuffle"     // randomly reorder values
+  },
+  "city": {
+    "action": "keep"        // leave unchanged
+  }
+}`}</CodeBlock>
+      </div>
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Example</p>
+      <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "file=@users.csv" \\
+  -F 'config={"name":{"action":"map","category":"animals"},"email":{"action":"map","category":"tech"}}' \\
+  ${API_BASE}/v1/csv/anonymize > anonymized.zip`)}</CodeBlock>
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
+      <p className="text-gray-400 text-sm">A ZIP file containing:</p>
+      <div className="border border-white/[0.06] rounded-xl overflow-hidden">
+        <div className="flex items-start gap-3 px-4 py-2.5 text-sm">
+          <code className="text-cyan-400 text-xs w-52 shrink-0">anonymized_data.csv</code>
+          <span className="text-gray-400 text-xs">CSV with values replaced according to your config</span>
+        </div>
+        <div className="flex items-start gap-3 px-4 py-2.5 text-sm border-t border-white/[0.06]">
+          <code className="text-cyan-400 text-xs w-52 shrink-0">deanonymization_key.json</code>
+          <span className="text-gray-400 text-xs">Mapping file to restore original values (keep this private)</span>
+        </div>
+      </div>
+      <CodeBlock>{`# anonymized_data.csv
+subject,email,age,city
+Tiger42857,Quantum697208,30,NYC
+Eagle31484,Nano144519,25,LA
+
+# deanonymization_key.json contains:
+# { "mappings": { "name": { "Alice": "Tiger42857", ... } }, "renames": { "name": "subject" } }`}</CodeBlock>
+    </div>
+
+    {/* Deanonymize */}
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-white border-b border-white/[0.06] pb-3">Restore</h2>
+      <p className="text-gray-400 text-sm">Upload an anonymized CSV together with the key file to reverse the mapping and get back the original data. Column names are also restored if they were renamed.</p>
+      <Endpoint method="POST" path="/v1/csv/deanonymize" responseType="csv" />
+      <ParamTable params={[
+        { name: 'file', type: 'file', required: true, desc: 'Anonymized CSV file' },
+        { name: 'key', type: 'file', required: true, desc: 'The deanonymization_key.json from the anonymize step' },
+      ]} />
+      <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "file=@anonymized_data.csv" \\
+  -F "key=@deanonymization_key.json" \\
+  ${API_BASE}/v1/csv/deanonymize > restored.csv`)}</CodeBlock>
+      <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3">
+        <p className="text-amber-400 text-xs"><strong>Note:</strong> Only <code className="text-amber-300">map</code> actions are reversible. Shuffled columns cannot be restored since the original order is not recorded.</p>
+      </div>
+    </div>
   </div>
 );
 
@@ -545,9 +612,11 @@ r = requests.post(f"{BASE}/v1/convert/image", headers=headers,
 open("photo.webp","wb").write(r.content)
 
 # Anonymize CSV
+import json
+config = json.dumps({"name": {"action": "map", "category": "animals"}})
 r = requests.post(f"{BASE}/v1/csv/anonymize", headers=headers,
-    files={"file": open("users.csv","rb")}, data={"mode": "redact"})
-open("safe.csv","w").write(r.text)
+    files={"file": open("users.csv","rb")}, data={"config": config})
+open("anonymized.zip","wb").write(r.content)
 
 # Get CSV stats
 r = requests.post(f"{BASE}/v1/csv/metadata", headers=headers,
