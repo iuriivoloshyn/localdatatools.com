@@ -1,5 +1,5 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
 const R2_ACCESS_KEY = process.env.R2_ACCESS_KEY || '';
@@ -20,14 +20,18 @@ function getClient(): S3Client {
   return s3;
 }
 
+export function hashKey(key: string): string {
+  return createHash('sha256').update(key).digest('hex');
+}
+
 interface KeyEntry {
-  key: string;
+  keyHash: string;
   email: string;
   createdAt: string;
 }
 
-// In-memory cache, refreshed from R2 periodically
-let cachedKeys: Set<string> = new Set();
+// In-memory cache of hashed keys, refreshed from R2 periodically
+let cachedKeyHashes: Set<string> = new Set();
 let lastFetch = 0;
 const CACHE_TTL = 60_000; // 1 minute
 
@@ -36,7 +40,22 @@ async function loadKeys(): Promise<KeyEntry[]> {
     const res = await getClient().send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: KEYS_FILE }));
     if (!res.Body) return [];
     const text = await res.Body.transformToString();
-    return JSON.parse(text);
+    const entries = JSON.parse(text);
+
+    // Auto-migrate: if any entry still has plaintext 'key' field, hash it
+    let migrated = false;
+    for (const entry of entries) {
+      if ((entry as any).key && !(entry as any).keyHash) {
+        entry.keyHash = hashKey((entry as any).key);
+        delete (entry as any).key;
+        migrated = true;
+      }
+    }
+    if (migrated) {
+      await saveKeys(entries);
+    }
+
+    return entries;
   } catch (e: any) {
     if (e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404) return [];
     throw e;
@@ -52,29 +71,31 @@ async function saveKeys(entries: KeyEntry[]): Promise<void> {
   }));
 }
 
-export async function getValidKeys(): Promise<Set<string>> {
+export async function getValidKeyHashes(): Promise<Set<string>> {
   const now = Date.now();
   if (now - lastFetch > CACHE_TTL) {
     const entries = await loadKeys();
-    cachedKeys = new Set(entries.map(e => e.key));
+    cachedKeyHashes = new Set(entries.map(e => e.keyHash));
     lastFetch = now;
   }
-  return cachedKeys;
+  return cachedKeyHashes;
 }
 
 export async function createKey(email: string): Promise<string> {
   const entries = await loadKeys();
 
-  // Check if email already has a key
+  // Check if email already has a key — can't return it since we only store hashes
   const existing = entries.find(e => e.email.toLowerCase() === email.toLowerCase());
-  if (existing) return existing.key;
+  if (existing) {
+    return ''; // Signal that a key already exists for this email
+  }
 
   const key = `ldt_${randomBytes(24).toString('hex')}`;
-  entries.push({ key, email: email.toLowerCase(), createdAt: new Date().toISOString() });
+  entries.push({ keyHash: hashKey(key), email: email.toLowerCase(), createdAt: new Date().toISOString() });
   await saveKeys(entries);
 
   // Update cache immediately
-  cachedKeys.add(key);
+  cachedKeyHashes.add(hashKey(key));
 
   return key;
 }
