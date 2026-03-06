@@ -103,6 +103,138 @@ const OPENAPI_SPEC = {
         },
       },
     },
+    '/v1/csv/diff': {
+      post: {
+        tags: ['Direct (< 50MB)'],
+        summary: 'Compare two CSV files',
+        description: 'Find added, removed, and changed rows between two CSV files. Optionally specify a key column for row-level matching.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  left: { type: 'string', format: 'binary', description: 'Left (original) CSV file' },
+                  right: { type: 'string', format: 'binary', description: 'Right (updated) CSV file' },
+                  key: { type: 'string', description: 'Optional key column for row-level matching' },
+                },
+                required: ['left', 'right'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Diff result with added, removed, and changed rows' },
+          '400': { description: 'Bad request' },
+        },
+      },
+    },
+    '/v1/csv/metadata': {
+      post: {
+        tags: ['Direct (< 50MB)'],
+        summary: 'Extract CSV metadata and statistics',
+        description: 'Analyze a CSV file to extract column types, row counts, null rates, and summary statistics (min, max, mean, median for numeric columns).',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'CSV file to analyze' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Metadata with column types, stats, and null rates' },
+          '400': { description: 'Bad request' },
+        },
+      },
+    },
+    '/v1/csv/anonymize': {
+      post: {
+        tags: ['Direct (< 50MB)'],
+        summary: 'Mask or redact PII in CSV columns',
+        description: 'Auto-detects or manually targets columns containing PII (emails, phone numbers, names, SSNs) and masks or redacts them.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'CSV file to anonymize' },
+                  columns: { type: 'string', description: 'Comma-separated column names to mask (auto-detect if omitted)' },
+                  mode: { type: 'string', enum: ['mask', 'redact'], default: 'mask', description: 'mask = partial hiding, redact = full replacement' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Anonymized CSV file', content: { 'text/csv': {} } },
+          '400': { description: 'Bad request' },
+        },
+      },
+    },
+    '/v1/convert/spreadsheet': {
+      post: {
+        tags: ['File Conversion'],
+        summary: 'Convert between CSV and Excel',
+        description: 'Upload a CSV to get an Excel file (.xlsx), or upload an Excel file to get CSV. Auto-detects direction based on file extension.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'CSV or Excel file' },
+                  sheet: { type: 'string', description: 'Sheet name for Excel input (defaults to first sheet)' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Converted file (CSV or Excel)' },
+          '400': { description: 'Bad request' },
+        },
+      },
+    },
+    '/v1/compress': {
+      post: {
+        tags: ['File Conversion'],
+        summary: 'Compress or decompress files',
+        description: 'Compress any file with gzip or deflate, or decompress a .gz/.zz file.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'File to compress or decompress' },
+                  action: { type: 'string', enum: ['compress', 'decompress'], default: 'compress' },
+                  format: { type: 'string', enum: ['gzip', 'deflate'], default: 'gzip' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Compressed or decompressed file' },
+          '400': { description: 'Bad request' },
+        },
+      },
+    },
     '/v1/jobs/merge': {
       post: {
         tags: ['Encrypted Jobs (up to 1GB)'],
