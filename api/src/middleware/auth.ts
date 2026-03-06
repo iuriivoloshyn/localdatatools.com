@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import { getValidKeys } from '../services/keys.js';
 
 // Static keys from env var (fallback / admin keys)
-const rawKeys = process.env.API_KEYS || (process.env.NODE_ENV === 'production' ? '' : 'demo-key-123');
+const rawKeys = process.env.API_KEYS || '';
 const STATIC_KEYS = new Set(rawKeys.split(',').map(k => k.trim()).filter(Boolean));
 
 export const apiKeyAuth: MiddlewareHandler = async (c, next) => {
