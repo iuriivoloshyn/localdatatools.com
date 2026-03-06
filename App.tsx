@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, Suspense, createContext, useContext } from 'react';
 import { ToolType, Language } from './types';
-import { Layers, Zap, ScanText, ChevronDown, Loader2, Snowflake, X, Maximize, Minimize, RotateCcw, BookOpen, Settings as SettingsIcon, RefreshCw, Eye, VenetianMask, BrainCircuit, Shield, HardDrive, Cpu, Lock, Database, Wrench, ArrowRight, Lightbulb, Fingerprint, MessageSquareText, MessageCircle, ExternalLink, Minimize2, GitCompare, Wifi, WifiOff, Download, CheckCircle2, Info, LayoutDashboard, Github } from 'lucide-react';
+import { Layers, Zap, ScanText, ChevronDown, Loader2, Snowflake, X, Maximize, Minimize, RotateCcw, BookOpen, Settings as SettingsIcon, RefreshCw, Eye, VenetianMask, BrainCircuit, Shield, HardDrive, Cpu, Lock, Database, Wrench, ArrowRight, Lightbulb, Fingerprint, MessageSquareText, MessageCircle, ExternalLink, Minimize2, GitCompare, Wifi, WifiOff, Download, CheckCircle2, Info, LayoutDashboard, Github, Code, Terminal } from 'lucide-react';
 import Snowfall, { SnowfallLayerConfig } from './components/effects/Snowfall';
 import SantaFace from './components/effects/SantaFace';
 import { GemmaProvider, useGemma } from './contexts/GemmaContext';
@@ -613,6 +613,7 @@ const AppContent: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <button onClick={() => handleToolClick('api-docs')} className="text-xs font-medium text-gray-500 hover:text-white transition-colors px-2 py-1">API</button>
                   <div className="relative h-9 w-9" ref={settingsRef}>
                     <button onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }} className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all shadow-sm p-0 bg-gray-900 border-white/[0.06] ${isSettingsOpen ? 'bg-gray-800 border-gray-700 text-white' : 'text-gray-400 hover:text-white hover:border-gray-600'}`}><SettingsIcon size={16} strokeWidth={2} /></button>
                     {isSettingsOpen && (
@@ -660,7 +661,13 @@ const AppContent: React.FC = () => {
             </div>
           </nav>
 
-          {!activeTool ? (
+          {activeTool === 'api-docs' ? (
+              <div key="api-docs" className={`flex-1 overflow-y-auto ${transitionClass}`}>
+                <Suspense fallback={<ToolLoader />}>
+                  <ApiDocs />
+                </Suspense>
+              </div>
+          ) : !activeTool ? (
               <div key="landing" className={`relative w-full flex-1 overflow-hidden flex flex-col items-center justify-center ${transitionClass}`}>
                    <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center">
                        <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] rounded-full transition-colors duration-1000" style={{ background: `radial-gradient(circle, ${theme.heroGlow} 0%, rgba(0,0,0,0) 70%)`, filter: 'blur(100px)', transform: 'translate3d(0,0,0)' }} />
@@ -683,7 +690,7 @@ const AppContent: React.FC = () => {
                             })}
                        </div>
                        
-                       <a 
+                       <a
                           href="https://github.com/iuriivoloshyn/localdatatools.com"
                           target="_blank"
                           rel="noopener noreferrer"
