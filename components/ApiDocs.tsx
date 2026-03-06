@@ -1,16 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, ExternalLink, Lock, Zap, FileText, Shield, Code, Key, Loader2, FileSpreadsheet, Image, Music, Archive, MessageCircle } from 'lucide-react';
+import { Copy, Check, ExternalLink, Lock, Zap, Shield, Code, Key, Loader2, MessageCircle } from 'lucide-react';
 
 const API_BASE = 'https://api.localdatatools.com';
 
 const NAV_SECTIONS = [
-  { id: 'quick-start', label: 'Quick Start' },
-  { id: 'authentication', label: 'Authentication' },
-  { id: 'csv', label: 'CSV Processing' },
-  { id: 'convert', label: 'File Conversion' },
-  { id: 'compress', label: 'Compression' },
-  { id: 'examples', label: 'Code Examples' },
+  {
+    group: 'Getting Started',
+    items: [
+      { id: 'quick-start', label: 'Quick Start' },
+      { id: 'authentication', label: 'Authentication' },
+    ],
+  },
+  {
+    group: 'CSV',
+    items: [
+      { id: 'csv-merge', label: 'Merge' },
+      { id: 'csv-join', label: 'Join' },
+      { id: 'csv-compare', label: 'Compare' },
+      { id: 'csv-metadata', label: 'Metadata' },
+      { id: 'csv-anonymize', label: 'Anonymize' },
+      { id: 'csv-analyze', label: 'Analyze' },
+    ],
+  },
+  {
+    group: 'Conversion',
+    items: [
+      { id: 'convert-spreadsheet', label: 'Spreadsheet' },
+      { id: 'convert-image', label: 'Image' },
+      { id: 'convert-document', label: 'Document' },
+      { id: 'convert-audio', label: 'Audio' },
+    ],
+  },
+  {
+    group: 'Other',
+    items: [
+      { id: 'compression', label: 'Compression' },
+      { id: 'large-files', label: 'Large Files' },
+    ],
+  },
+  {
+    group: '',
+    items: [
+      { id: 'examples', label: 'Code Examples' },
+    ],
+  },
 ];
+
+const allIds = NAV_SECTIONS.flatMap(s => s.items.map(i => i.id));
 
 const CodeBlock = ({ children }: { children: string }) => {
   const [copied, setCopied] = useState(false);
@@ -31,7 +67,7 @@ const CodeBlock = ({ children }: { children: string }) => {
   );
 };
 
-const ResponseBadge = ({ type }: { type: 'json' | 'file' | 'csv' }) => {
+const Badge = ({ type }: { type: 'json' | 'file' | 'csv' }) => {
   const styles = {
     json: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
     file: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -41,29 +77,34 @@ const ResponseBadge = ({ type }: { type: 'json' | 'file' | 'csv' }) => {
   return <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider border ${styles[type]}`}>{labels[type]}</span>;
 };
 
-const EndpointCard = ({ method, path, description, responseType, children }: { method: string; path: string; description: string; responseType?: 'json' | 'file' | 'csv'; children?: React.ReactNode }) => (
-  <div className="bg-gray-900/50 border border-white/[0.06] rounded-2xl overflow-hidden">
-    <div className="p-5 border-b border-white/[0.06]">
-      <div className="flex items-center gap-3 mb-1.5">
-        <span className={`px-2.5 py-1 rounded-lg text-xs font-black tracking-wider ${method === 'POST' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>{method}</span>
-        <code className="text-white font-mono text-sm">{path}</code>
-        {responseType && <ResponseBadge type={responseType} />}
-      </div>
-      <p className="text-gray-400 text-sm">{description}</p>
-    </div>
-    {children && <div className="p-5">{children}</div>}
+const Endpoint = ({ method, path, responseType }: { method: string; path: string; responseType?: 'json' | 'file' | 'csv' }) => (
+  <div className="flex items-center gap-3 mb-4">
+    <span className={`px-2.5 py-1 rounded-lg text-xs font-black tracking-wider ${method === 'POST' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>{method}</span>
+    <code className="text-white font-mono text-sm">{path}</code>
+    {responseType && <Badge type={responseType} />}
   </div>
 );
 
-const ParamGrid = ({ params }: { params: { name: string; desc: string }[] }) => (
-  <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-    {params.map(({ name, desc }) => (
-      <div key={name} className="bg-gray-950 rounded-lg p-2.5 border border-white/[0.06]">
-        <span className="text-gray-500">{name}</span>
-        <span className="text-white ml-2">{desc}</span>
-      </div>
-    ))}
+const ParamTable = ({ params }: { params: { name: string; type: string; required?: boolean; desc: string }[] }) => (
+  <div className="mb-5">
+    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Parameters</p>
+    <div className="border border-white/[0.06] rounded-xl overflow-hidden">
+      {params.map(({ name, type, required, desc }, i) => (
+        <div key={name} className={`flex items-start gap-3 px-4 py-2.5 text-sm ${i > 0 ? 'border-t border-white/[0.06]' : ''}`}>
+          <div className="w-36 shrink-0 flex items-center gap-2">
+            <code className="text-cyan-400 text-xs">{name}</code>
+            {required && <span className="text-[9px] text-red-400 font-bold">REQUIRED</span>}
+          </div>
+          <span className="text-gray-600 text-xs w-16 shrink-0">{type}</span>
+          <span className="text-gray-400 text-xs">{desc}</span>
+        </div>
+      ))}
+    </div>
   </div>
+);
+
+const SectionDivider = () => (
+  <div className="border-t border-white/[0.06]" />
 );
 
 const KeyGenerator = ({ onKeyGenerated }: { onKeyGenerated: (key: string) => void }) => {
@@ -154,9 +195,9 @@ const ApiDocs: React.FC = () => {
           }
         }
       },
-      { rootMargin: '-20% 0px -60% 0px' }
+      { rootMargin: '-10% 0px -70% 0px' }
     );
-    NAV_SECTIONS.forEach(({ id }) => {
+    allIds.forEach((id) => {
       const el = document.getElementById(id);
       if (el) observer.observe(el);
     });
@@ -164,47 +205,57 @@ const ApiDocs: React.FC = () => {
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12 flex gap-12">
+    <div className="max-w-7xl mx-auto px-4 py-12 flex gap-8">
       {/* Sidebar */}
-      <nav className="hidden lg:block w-52 shrink-0">
-        <div className="sticky top-24 space-y-1">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-3">On this page</p>
-          {NAV_SECTIONS.map(({ id, label }) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              onClick={(e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
-              className={`block px-3 py-1.5 rounded-lg text-sm transition-all ${activeSection === id ? 'text-cyan-400 bg-cyan-500/5 font-medium' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              {label}
-            </a>
+      <nav className="hidden lg:block w-48 shrink-0">
+        <div className="sticky top-24 space-y-5">
+          {NAV_SECTIONS.map(({ group, items }) => (
+            <div key={group || 'ungrouped'}>
+              {group && <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5 px-3">{group}</p>}
+              <div className="space-y-0.5">
+                {items.map(({ id, label }) => (
+                  <a
+                    key={id}
+                    href={`#${id}`}
+                    onClick={(e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                    className={`block px-3 py-1.5 rounded-lg text-[13px] transition-all ${activeSection === id ? 'text-cyan-400 bg-cyan-500/5 font-medium' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </div>
           ))}
-          <div className="border-t border-white/[0.06] mt-4 pt-4">
-            <a href="https://github.com/iuriivoloshyn/localdatatools.com/tree/api/api" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-500 hover:text-gray-300 transition-all">
-              GitHub <ExternalLink size={12} />
+          <div className="border-t border-white/[0.06] pt-3">
+            <a href="https://github.com/iuriivoloshyn/localdatatools.com/tree/api/api" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-1.5 text-[13px] text-gray-500 hover:text-gray-300 transition-all">
+              GitHub <ExternalLink size={11} />
             </a>
           </div>
         </div>
       </nav>
 
       {/* Content */}
-      <div className="flex-1 min-w-0 space-y-16">
-        {/* Header */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-              <Code size={24} className="text-cyan-400" />
+      <div className="flex-1 min-w-0 space-y-20">
+
+        {/* ───────── QUICK START ───────── */}
+        <section id="quick-start" className="scroll-mt-24 space-y-5">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+                <Code size={24} className="text-cyan-400" />
+              </div>
+              <h1 className="text-3xl font-black text-white">API Reference</h1>
             </div>
-            <h1 className="text-3xl font-black text-white">API Documentation</h1>
+            <p className="text-gray-400 text-lg max-w-2xl leading-relaxed">
+              Privacy-first file processing. CSV tools, format conversion, compression — all via simple HTTP calls.
+            </p>
           </div>
-          <p className="text-gray-400 text-lg max-w-2xl leading-relaxed">
-            Privacy-first file processing via simple HTTP calls. CSV tools, file conversion, compression, and encrypted large file storage.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { icon: Zap, title: '14 Endpoints', desc: 'CSV, images, audio, documents, compression' },
-              { icon: Shield, title: 'Encrypted', desc: 'AES-256-GCM zero-knowledge storage' },
-              { icon: Lock, title: 'Authenticated', desc: 'API key + 30 req/min rate limit' },
+              { icon: Zap, title: '14 Endpoints', desc: 'CSV, images, audio, docs, compression' },
+              { icon: Shield, title: 'Encrypted Storage', desc: 'AES-256-GCM for large files' },
+              { icon: Lock, title: 'Authenticated', desc: 'API key · 30 req/min · 50MB/file' },
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="bg-gray-900/50 border border-white/[0.06] rounded-xl p-4 flex items-start gap-3">
                 <div className="p-1.5 rounded-lg bg-cyan-500/10"><Icon size={14} className="text-cyan-400" /></div>
@@ -215,277 +266,400 @@ const ApiDocs: React.FC = () => {
               </div>
             ))}
           </div>
-          <KeyGenerator onKeyGenerated={setGeneratedKey} />
-          {generatedKey && <p className="text-xs text-cyan-400/60">Your key has been applied to all code examples below.</p>}
-        </div>
 
-        {/* Quick Start */}
-        <section id="quick-start" className="space-y-4 scroll-mt-24">
-          <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <Zap size={20} className="text-cyan-400" /> Quick Start
-          </h2>
           <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
   -F "files=@file1.csv" -F "files=@file2.csv" \\
   ${API_BASE}/v1/csv/merge > merged.csv`)}</CodeBlock>
         </section>
 
-        {/* Authentication */}
-        <section id="authentication" className="space-y-4 scroll-mt-24">
-          <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <Lock size={20} className="text-cyan-400" /> Authentication
-          </h2>
-          <p className="text-gray-400">Pass your key via the <code className="text-cyan-400 bg-gray-900 px-2 py-0.5 rounded">X-API-Key</code> header with every request.</p>
+        <SectionDivider />
+
+        {/* ───────── AUTHENTICATION ───────── */}
+        <section id="authentication" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">Authentication</h2>
+          <p className="text-gray-400">Generate a free API key and pass it via the <code className="text-cyan-400 bg-gray-900 px-2 py-0.5 rounded text-sm">X-API-Key</code> header.</p>
+
+          <KeyGenerator onKeyGenerated={setGeneratedKey} />
+          {generatedKey && <p className="text-xs text-cyan-400/60">Key applied to all examples below.</p>}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4">
+              <p className="text-white font-bold text-xs mb-1">Base URL</p>
+              <code className="text-cyan-400 text-xs">{API_BASE}</code>
+            </div>
+            <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4">
+              <p className="text-white font-bold text-xs mb-1">Rate Limit</p>
+              <p className="text-gray-400 text-xs">30 requests per minute per key</p>
+            </div>
+            <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4">
+              <p className="text-white font-bold text-xs mb-1">Max File Size</p>
+              <p className="text-gray-400 text-xs">50MB direct · up to 1GB via <code className="text-cyan-400">/v1/jobs/*</code></p>
+            </div>
+          </div>
+
+          <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4 space-y-2">
+            <p className="text-white font-bold text-xs">Error Format</p>
+            <p className="text-gray-400 text-xs">All errors return JSON with an <code className="text-cyan-400">error</code> field.</p>
+            <CodeBlock>{`{"error": "Invalid API key."}     // 401
+{"error": "Rate limit exceeded."} // 429
+{"error": "File exceeds 50MB."}   // 400`}</CodeBlock>
+          </div>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── CSV MERGE ───────── */}
+        <section id="csv-merge" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">CSV Merge</h2>
+          <p className="text-gray-400">Stack multiple CSV files vertically. First file's headers are used.</p>
+          <Endpoint method="POST" path="/v1/csv/merge" responseType="csv" />
+
+          <ParamTable params={[
+            { name: 'files', type: 'file[]', required: true, desc: 'Two or more CSV files to merge' },
+          ]} />
+
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "files=@file1.csv" -F "files=@file2.csv" \\
+  ${API_BASE}/v1/csv/merge > merged.csv`)}</CodeBlock>
+
+          <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-xl p-4">
+            <p className="text-cyan-400 text-xs font-bold mb-1">Files over 50MB?</p>
+            <p className="text-gray-400 text-xs">Use <code className="text-cyan-400">/v1/jobs/merge</code> for encrypted large file processing up to 1GB. See <a href="#large-files" className="text-cyan-400 hover:underline">Large Files</a>.</p>
+          </div>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── CSV JOIN ───────── */}
+        <section id="csv-join" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">CSV Join</h2>
+          <p className="text-gray-400">Left or inner join two CSV files on a key column.</p>
+          <Endpoint method="POST" path="/v1/csv/join" responseType="csv" />
+
+          <ParamTable params={[
+            { name: 'left', type: 'file', required: true, desc: 'Left CSV file' },
+            { name: 'right', type: 'file', required: true, desc: 'Right CSV file' },
+            { name: 'left_key', type: 'string', required: true, desc: 'Join column in left file' },
+            { name: 'right_key', type: 'string', required: true, desc: 'Join column in right file' },
+            { name: 'join_type', type: 'string', desc: 'left (default) or inner' },
+            { name: 'case_sensitive', type: 'string', desc: 'true (default) or false' },
+          ]} />
+
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "left=@employees.csv" -F "right=@salaries.csv" \\
+  -F "left_key=id" -F "right_key=emp_id" \\
+  ${API_BASE}/v1/csv/join > joined.csv`)}</CodeBlock>
+
+          <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-xl p-4">
+            <p className="text-cyan-400 text-xs font-bold mb-1">Files over 50MB?</p>
+            <p className="text-gray-400 text-xs">Use <code className="text-cyan-400">/v1/jobs/join</code> — same parameters, encrypted storage. See <a href="#large-files" className="text-cyan-400 hover:underline">Large Files</a>.</p>
+          </div>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── CSV COMPARE ───────── */}
+        <section id="csv-compare" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">CSV Compare</h2>
+          <p className="text-gray-400">Diff two CSV files. Returns added, removed, and changed rows.</p>
+          <Endpoint method="POST" path="/v1/csv/diff" responseType="json" />
+
+          <ParamTable params={[
+            { name: 'left', type: 'file', required: true, desc: 'Original CSV file' },
+            { name: 'right', type: 'file', required: true, desc: 'Updated CSV file' },
+            { name: 'key', type: 'string', desc: 'Key column for row matching (enables change detection)' },
+          ]} />
+
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "left=@v1.csv" -F "right=@v2.csv" -F "key=id" \\
+  ${API_BASE}/v1/csv/diff`)}</CodeBlock>
+
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
+          <CodeBlock>{`{
+  "summary": {"added": 5, "removed": 2, "changed": 3, "unchanged": 100},
+  "added": [["4", "Diana", "28"]],
+  "removed": [["3", "Charlie", "35"]],
+  "changed": [{"key": "1", "left": ["1","Alice","30"], "right": ["1","Alice","31"]}]
+}`}</CodeBlock>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── CSV METADATA ───────── */}
+        <section id="csv-metadata" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">CSV Metadata</h2>
+          <p className="text-gray-400">Extract column types, row counts, null rates, and summary statistics from a CSV.</p>
+          <Endpoint method="POST" path="/v1/csv/metadata" responseType="json" />
+
+          <ParamTable params={[
+            { name: 'file', type: 'file', required: true, desc: 'CSV file to analyze' },
+          ]} />
+
           <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
   -F "file=@data.csv" \\
   ${API_BASE}/v1/csv/metadata`)}</CodeBlock>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4 space-y-2">
-              <p className="text-white font-bold text-xs">Base URL</p>
-              <code className="text-cyan-400 text-xs">{API_BASE}</code>
-            </div>
-            <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4 space-y-2">
-              <p className="text-white font-bold text-xs">Limits</p>
-              <p className="text-gray-400 text-xs">30 req/min per key · 50MB per file · Use <code className="text-cyan-400">/v1/jobs/*</code> for up to 1GB</p>
-            </div>
-          </div>
-          <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4 space-y-2">
-            <p className="text-white font-bold text-xs">Error Responses</p>
-            <p className="text-gray-400 text-xs">All errors return JSON with an <code className="text-cyan-400">error</code> field and appropriate HTTP status code.</p>
-            <CodeBlock>{`// 400 Bad Request
-{"error": "Upload a file as \\"file\\" form field."}
 
-// 401 Unauthorized
-{"error": "Invalid API key."}
-
-// 429 Too Many Requests
-{"error": "Rate limit exceeded."}`}</CodeBlock>
-          </div>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
+          <CodeBlock>{`{
+  "fileName": "data.csv",
+  "rowCount": 1000,
+  "columnCount": 4,
+  "columns": [
+    {"header": "age", "type": "integer", "min": 18, "max": 65, "mean": 34.2},
+    {"header": "email", "type": "string", "nullRate": 0.02, "unique": 980}
+  ]
+}`}</CodeBlock>
         </section>
 
-        {/* CSV Processing */}
-        <section id="csv" className="space-y-6 scroll-mt-24">
-          <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <FileText size={20} className="text-cyan-400" /> CSV Processing
-            <span className="text-xs font-medium text-gray-500 bg-gray-900 px-3 py-1 rounded-full">6 endpoints</span>
-          </h2>
+        <SectionDivider />
 
-          <EndpointCard method="POST" path="/v1/csv/merge" responseType="csv" description="Stack multiple CSV files vertically. First file's headers are kept. For files over 50MB, use the encrypted /v1/jobs/merge endpoint (up to 1GB).">
-            <CodeBlock>{`# Direct merge (< 50MB)
-curl -H "X-API-Key: $API_KEY" \\
-  -F "files=@file1.csv" -F "files=@file2.csv" \\
-  ${API_BASE}/v1/csv/merge > merged.csv
+        {/* ───────── CSV ANONYMIZE ───────── */}
+        <section id="csv-anonymize" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">CSV Anonymize</h2>
+          <p className="text-gray-400">Auto-detect and mask PII — emails, phones, names, SSNs, addresses.</p>
+          <Endpoint method="POST" path="/v1/csv/anonymize" responseType="csv" />
 
-# Large file merge via encrypted storage (up to 1GB)
-curl -H "X-API-Key: $API_KEY" \\
-  -F "files=@huge1.csv" -F "files=@huge2.csv" \\
-  ${API_BASE}/v1/jobs/merge
-# Returns: {"jobId": "...", "fileKey": "...", "downloadUrl": "..."}
+          <ParamTable params={[
+            { name: 'file', type: 'file', required: true, desc: 'CSV file with PII data' },
+            { name: 'columns', type: 'string', desc: 'Comma-separated column names (auto-detect if omitted)' },
+            { name: 'mode', type: 'string', desc: 'mask (default) — partial masking, or redact — full replacement' },
+          ]} />
 
-# Download encrypted result (one-time download)
-curl -H "X-API-Key: $API_KEY" \\
-  "${API_BASE}/v1/jobs/JOB_ID/download?key=FILE_KEY" > result.csv`}</CodeBlock>
-          </EndpointCard>
-
-          <EndpointCard method="POST" path="/v1/csv/join" responseType="csv" description="Left or inner join two CSVs on a key column. For files over 50MB, use /v1/jobs/join (up to 1GB).">
-            <ParamGrid params={[
-              { name: 'left_key', desc: 'Column in left file' },
-              { name: 'right_key', desc: 'Column in right file' },
-              { name: 'join_type', desc: 'left | inner' },
-              { name: 'case_sensitive', desc: 'true | false' },
-            ]} />
-            <CodeBlock>{`# Direct join (< 50MB)
-curl -H "X-API-Key: $API_KEY" \\
-  -F "left=@employees.csv" -F "right=@salaries.csv" \\
-  -F "left_key=id" -F "right_key=emp_id" \\
-  ${API_BASE}/v1/csv/join > joined.csv
-
-# Large file join via encrypted storage (up to 1GB)
-curl -H "X-API-Key: $API_KEY" \\
-  -F "left=@big_left.csv" -F "right=@big_right.csv" \\
-  -F "left_key=id" -F "right_key=emp_id" \\
-  ${API_BASE}/v1/jobs/join`}</CodeBlock>
-          </EndpointCard>
-
-          <EndpointCard method="POST" path="/v1/csv/diff" responseType="json" description="Compare two CSV files. Returns added, removed, and changed rows.">
-            <ParamGrid params={[
-              { name: 'left', desc: 'Original CSV file' },
-              { name: 'right', desc: 'Updated CSV file' },
-              { name: 'key', desc: 'Optional key column for row matching' },
-            ]} />
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "left=@v1.csv" -F "right=@v2.csv" -F "key=id" \\
-  ${API_BASE}/v1/csv/diff
-
-# {"summary": {"added": 5, "removed": 2, "changed": 3, "unchanged": 100}}`}</CodeBlock>
-          </EndpointCard>
-
-          <EndpointCard method="POST" path="/v1/csv/metadata" responseType="json" description="Extract column types, row counts, null rates, and summary statistics.">
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "file=@data.csv" \\
-  ${API_BASE}/v1/csv/metadata
-
-# {"rowCount": 1000, "columns": [
-#   {"header": "age", "type": "integer", "min": 18, "max": 65, "mean": 34.2},
-#   {"header": "email", "type": "string", "nullRate": 0.02, "unique": 980}
-# ]}`}</CodeBlock>
-          </EndpointCard>
-
-          <EndpointCard method="POST" path="/v1/csv/anonymize" responseType="csv" description="Auto-detect and mask PII — emails, phones, names, SSNs, addresses.">
-            <ParamGrid params={[
-              { name: 'columns', desc: 'Comma-separated columns (auto-detect if omitted)' },
-              { name: 'mode', desc: 'mask (default) | redact' },
-            ]} />
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
   -F "file=@users.csv" -F "mode=mask" \\
-  ${API_BASE}/v1/csv/anonymize > anonymized.csv
+  ${API_BASE}/v1/csv/anonymize > anonymized.csv`)}</CodeBlock>
 
-# alice@test.com → a***@test.com
-# 555-123-4567  → 5**********7`}</CodeBlock>
-          </EndpointCard>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Output</p>
+          <CodeBlock>{`# mode=mask
+alice@test.com → a***@test.com
+555-123-4567   → 5**********7
+Alice Smith    → A***e S***h
 
-          <EndpointCard method="POST" path="/v1/csv/analyze" responseType="json" description="Check if files have compatible headers before merging.">
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "files=@file1.csv" -F "files=@file2.csv" \\
-  ${API_BASE}/v1/csv/analyze`}</CodeBlock>
-          </EndpointCard>
+# mode=redact
+alice@test.com → [REDACTED]
+555-123-4567   → [REDACTED]`}</CodeBlock>
         </section>
 
-        {/* File Conversion */}
-        <section id="convert" className="space-y-6 scroll-mt-24">
-          <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <FileSpreadsheet size={20} className="text-cyan-400" /> File Conversion
-            <span className="text-xs font-medium text-gray-500 bg-gray-900 px-3 py-1 rounded-full">4 endpoints</span>
-          </h2>
+        <SectionDivider />
 
-          <EndpointCard method="POST" path="/v1/convert/spreadsheet" responseType="file" description="CSV to Excel or Excel to CSV. Auto-detects direction from file extension.">
-            <ParamGrid params={[
-              { name: 'file', desc: '.csv, .tsv, .xlsx, or .xls' },
-              { name: 'sheet', desc: 'Sheet name for Excel input (optional)' },
-            ]} />
-            <CodeBlock>{`# CSV → Excel
-curl -H "X-API-Key: $API_KEY" \\
+        {/* ───────── CSV ANALYZE ───────── */}
+        <section id="csv-analyze" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">CSV Analyze</h2>
+          <p className="text-gray-400">Check if multiple CSV files have compatible headers before merging.</p>
+          <Endpoint method="POST" path="/v1/csv/analyze" responseType="json" />
+
+          <ParamTable params={[
+            { name: 'files', type: 'file[]', required: true, desc: 'Two or more CSV files to check compatibility' },
+          ]} />
+
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "files=@file1.csv" -F "files=@file2.csv" \\
+  ${API_BASE}/v1/csv/analyze`)}</CodeBlock>
+
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
+          <CodeBlock>{`{
+  "primary": "file1.csv",
+  "primaryHeaders": ["id", "name", "age"],
+  "results": [{"file": "file2.csv", "compatible": true, "reason": "Compatible"}],
+  "canMerge": true
+}`}</CodeBlock>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── CONVERT SPREADSHEET ───────── */}
+        <section id="convert-spreadsheet" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">Spreadsheet Conversion</h2>
+          <p className="text-gray-400">CSV to Excel or Excel to CSV. Auto-detects direction from file extension.</p>
+          <Endpoint method="POST" path="/v1/convert/spreadsheet" responseType="file" />
+
+          <ParamTable params={[
+            { name: 'file', type: 'file', required: true, desc: '.csv, .tsv, .xlsx, or .xls file' },
+            { name: 'sheet', type: 'string', desc: 'Sheet name when converting from Excel (defaults to first sheet)' },
+          ]} />
+
+          <CodeBlock>{k(`# CSV → Excel
+curl -H "X-API-Key: your-api-key" \\
   -F "file=@data.csv" \\
   ${API_BASE}/v1/convert/spreadsheet > data.xlsx
 
 # Excel → CSV
-curl -H "X-API-Key: $API_KEY" \\
+curl -H "X-API-Key: your-api-key" \\
   -F "file=@report.xlsx" -F "sheet=Sales" \\
-  ${API_BASE}/v1/convert/spreadsheet > report.csv`}</CodeBlock>
-          </EndpointCard>
+  ${API_BASE}/v1/convert/spreadsheet > report.csv`)}</CodeBlock>
 
-          <EndpointCard method="POST" path="/v1/convert/image" responseType="file" description="Convert between PNG, JPEG, WebP, AVIF, TIFF, GIF. Optional resize.">
-            <ParamGrid params={[
-              { name: 'format', desc: 'png, jpeg, webp, avif, tiff, gif' },
-              { name: 'quality', desc: '1-100 (default 80)' },
-              { name: 'width', desc: 'Resize width (optional)' },
-              { name: 'height', desc: 'Resize height (optional)' },
-            ]} />
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+          <p className="text-gray-500 text-xs">Response headers include <code className="text-cyan-400">X-Rows</code>, <code className="text-cyan-400">X-Columns</code>, and <code className="text-cyan-400">X-Sheet-Name</code>.</p>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── CONVERT IMAGE ───────── */}
+        <section id="convert-image" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">Image Conversion</h2>
+          <p className="text-gray-400">Convert between PNG, JPEG, WebP, AVIF, TIFF, GIF with optional resize.</p>
+          <Endpoint method="POST" path="/v1/convert/image" responseType="file" />
+
+          <ParamTable params={[
+            { name: 'file', type: 'file', required: true, desc: 'Image file to convert' },
+            { name: 'format', type: 'string', required: true, desc: 'png, jpeg, webp, avif, tiff, or gif' },
+            { name: 'quality', type: 'number', desc: '1–100 (default 80). Applies to jpeg, webp, avif, tiff.' },
+            { name: 'width', type: 'number', desc: 'Resize width in pixels (maintains aspect ratio)' },
+            { name: 'height', type: 'number', desc: 'Resize height in pixels (maintains aspect ratio)' },
+          ]} />
+
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
   -F "file=@photo.png" -F "format=webp" -F "quality=85" \\
   ${API_BASE}/v1/convert/image > photo.webp
 
 # Resize to 800px wide
-curl -H "X-API-Key: $API_KEY" \\
+curl -H "X-API-Key: your-api-key" \\
   -F "file=@banner.jpg" -F "format=png" -F "width=800" \\
-  ${API_BASE}/v1/convert/image > banner.png`}</CodeBlock>
-          </EndpointCard>
+  ${API_BASE}/v1/convert/image > banner.png`)}</CodeBlock>
 
-          <EndpointCard method="POST" path="/v1/convert/document" responseType="file" description="Extract text from PDF. Output as plain text, DOCX, or structured JSON.">
-            <ParamGrid params={[
-              { name: 'file', desc: 'PDF file' },
-              { name: 'format', desc: 'txt (default), docx, json' },
-            ]} />
-            <CodeBlock>{`# PDF → text
-curl -H "X-API-Key: $API_KEY" \\
-  -F "file=@document.pdf" -F "format=txt" \\
+          <p className="text-gray-500 text-xs">Response headers include <code className="text-cyan-400">X-Original-Size</code>, <code className="text-cyan-400">X-Output-Size</code>, and <code className="text-cyan-400">X-Original-Dimensions</code>.</p>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── CONVERT DOCUMENT ───────── */}
+        <section id="convert-document" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">Document Conversion</h2>
+          <p className="text-gray-400">Extract text from PDF files. Output as plain text, DOCX, or structured JSON.</p>
+          <Endpoint method="POST" path="/v1/convert/document" responseType="file" />
+
+          <ParamTable params={[
+            { name: 'file', type: 'file', required: true, desc: 'PDF file to convert' },
+            { name: 'format', type: 'string', desc: 'txt (default), docx, or json' },
+          ]} />
+
+          <CodeBlock>{k(`# PDF → plain text
+curl -H "X-API-Key: your-api-key" \\
+  -F "file=@document.pdf" \\
   ${API_BASE}/v1/convert/document > document.txt
 
 # PDF → DOCX
-curl -H "X-API-Key: $API_KEY" \\
+curl -H "X-API-Key: your-api-key" \\
   -F "file=@document.pdf" -F "format=docx" \\
-  ${API_BASE}/v1/convert/document > document.docx`}</CodeBlock>
-          </EndpointCard>
+  ${API_BASE}/v1/convert/document > document.docx
 
-          <EndpointCard method="POST" path="/v1/convert/audio" responseType="file" description="Convert between MP3, WAV, FLAC, AAC, OGG, WebM, WMA, M4A via FFmpeg.">
-            <ParamGrid params={[
-              { name: 'file', desc: 'Audio file' },
-              { name: 'format', desc: 'mp3, wav, flac, aac, ogg, webm, wma, m4a' },
-            ]} />
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "file=@recording.wav" -F "format=mp3" \\
-  ${API_BASE}/v1/convert/audio > recording.mp3`}</CodeBlock>
-          </EndpointCard>
+# PDF → JSON (includes metadata)
+curl -H "X-API-Key: your-api-key" \\
+  -F "file=@document.pdf" -F "format=json" \\
+  ${API_BASE}/v1/convert/document`)}</CodeBlock>
+
+          <p className="text-gray-500 text-xs">Response headers include <code className="text-cyan-400">X-Pages</code> with the page count.</p>
         </section>
 
-        {/* Compression */}
-        <section id="compress" className="space-y-6 scroll-mt-24">
-          <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <Archive size={20} className="text-cyan-400" /> Compression
-          </h2>
-          <p className="text-gray-400 text-sm">Three modes in one endpoint: <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">gzip</code> for single files, <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">zip</code> for archives, <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">image</code> for lossy image optimization.</p>
+        <SectionDivider />
 
-          <EndpointCard method="POST" path="/v1/compress" responseType="file" description="Compress or decompress files. Mode determines behavior.">
-            <ParamGrid params={[
-              { name: 'mode', desc: 'gzip | zip | image' },
-              { name: 'file', desc: 'File (for gzip/image)' },
-              { name: 'files', desc: 'Multiple files (for zip)' },
-              { name: 'action', desc: 'compress | decompress (gzip only)' },
-              { name: 'quality', desc: '1-100 (image mode, default 70)' },
-            ]} />
-            <CodeBlock>{`# GZIP a file
-curl -H "X-API-Key: $API_KEY" \\
+        {/* ───────── CONVERT AUDIO ───────── */}
+        <section id="convert-audio" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">Audio Conversion</h2>
+          <p className="text-gray-400">Convert between audio formats using FFmpeg.</p>
+          <Endpoint method="POST" path="/v1/convert/audio" responseType="file" />
+
+          <ParamTable params={[
+            { name: 'file', type: 'file', required: true, desc: 'Audio file to convert' },
+            { name: 'format', type: 'string', required: true, desc: 'mp3, wav, flac, aac, ogg, webm, wma, or m4a' },
+          ]} />
+
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "file=@recording.wav" -F "format=mp3" \\
+  ${API_BASE}/v1/convert/audio > recording.mp3`)}</CodeBlock>
+
+          <p className="text-gray-500 text-xs">Response headers include <code className="text-cyan-400">X-Original-Size</code> and <code className="text-cyan-400">X-Output-Size</code>.</p>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── COMPRESSION ───────── */}
+        <section id="compression" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">Compression</h2>
+          <p className="text-gray-400">Three modes in one endpoint: gzip for single files, zip for archives, image for lossy optimization.</p>
+          <Endpoint method="POST" path="/v1/compress" responseType="file" />
+
+          <ParamTable params={[
+            { name: 'mode', type: 'string', required: true, desc: 'gzip, zip, or image' },
+            { name: 'file', type: 'file', desc: 'Single file (for gzip and image modes)' },
+            { name: 'files', type: 'file[]', desc: 'Multiple files (for zip mode)' },
+            { name: 'action', type: 'string', desc: 'compress (default) or decompress (gzip only)' },
+            { name: 'quality', type: 'number', desc: '1–100 (image mode only, default 70)' },
+          ]} />
+
+          <CodeBlock>{k(`# Gzip a file
+curl -H "X-API-Key: your-api-key" \\
   -F "file=@access.log" -F "mode=gzip" \\
   ${API_BASE}/v1/compress > access.log.gz
 
 # Decompress
-curl -H "X-API-Key: $API_KEY" \\
+curl -H "X-API-Key: your-api-key" \\
   -F "file=@access.log.gz" -F "mode=gzip" -F "action=decompress" \\
   ${API_BASE}/v1/compress > access.log
 
-# ZIP multiple files
-curl -H "X-API-Key: $API_KEY" \\
+# Zip multiple files
+curl -H "X-API-Key: your-api-key" \\
   -F "files=@file1.csv" -F "files=@file2.csv" -F "mode=zip" \\
   ${API_BASE}/v1/compress > archive.zip
 
 # Lossy image compression
-curl -H "X-API-Key: $API_KEY" \\
+curl -H "X-API-Key: your-api-key" \\
   -F "file=@photo.jpg" -F "mode=image" -F "quality=60" \\
-  ${API_BASE}/v1/compress > photo_small.jpg`}</CodeBlock>
-          </EndpointCard>
+  ${API_BASE}/v1/compress > photo_small.jpg`)}</CodeBlock>
         </section>
 
-        {/* Response Headers */}
-        <div className="bg-gray-900/50 border border-white/[0.06] rounded-xl p-5 space-y-3">
-          <h4 className="text-white font-bold text-sm">Response Headers</h4>
-          <p className="text-gray-400 text-xs">Binary responses include metadata headers you can use for logging or validation:</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            {[
-              { header: 'Content-Disposition', desc: 'Suggested filename for the output' },
-              { header: 'X-Rows / X-Columns', desc: 'Row and column counts (spreadsheet)' },
-              { header: 'X-Original-Size', desc: 'Input file size in bytes' },
-              { header: 'X-Output-Size', desc: 'Output file size in bytes' },
-              { header: 'X-Original-Dimensions', desc: 'Input image dimensions (image)' },
-              { header: 'X-Pages', desc: 'Page count (document)' },
-            ].map(({ header, desc }) => (
-              <div key={header} className="bg-gray-950 rounded-lg p-2.5 border border-white/[0.06]">
-                <code className="text-cyan-400 text-[11px]">{header}</code>
-                <span className="text-gray-500 ml-2">{desc}</span>
-              </div>
-            ))}
+        <SectionDivider />
+
+        {/* ───────── LARGE FILES ───────── */}
+        <section id="large-files" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">Large Files</h2>
+          <p className="text-gray-400">For files over 50MB (up to 1GB), use the encrypted job endpoints. Results are encrypted with AES-256-GCM — the decryption key is only returned to you, never stored on the server.</p>
+
+          <div className="space-y-4">
+            <div>
+              <Endpoint method="POST" path="/v1/jobs/merge" responseType="json" />
+              <p className="text-gray-400 text-sm mb-3">Same as <code className="text-cyan-400">/v1/csv/merge</code> but for large files. Returns a job with download URL and decryption key.</p>
+            </div>
+
+            <div>
+              <Endpoint method="POST" path="/v1/jobs/join" responseType="json" />
+              <p className="text-gray-400 text-sm mb-3">Same as <code className="text-cyan-400">/v1/csv/join</code> but for large files. Same parameters.</p>
+            </div>
+
+            <div>
+              <Endpoint method="GET" path="/v1/jobs/:id/download?key=FILE_KEY" responseType="file" />
+              <p className="text-gray-400 text-sm mb-3">Download and decrypt the result. One-time download — file is deleted after retrieval or expires in 24 hours.</p>
+            </div>
           </div>
-        </div>
 
-        {/* Encrypted Storage Note */}
-        <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-xl p-5 space-y-2">
-          <h4 className="text-cyan-400 font-bold text-sm flex items-center gap-2"><Lock size={14} /> Large File Encryption (merge & join)</h4>
-          <p className="text-gray-400 text-sm">Files over 50MB use <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">/v1/jobs/*</code> endpoints. Results are encrypted with AES-256-GCM and stored temporarily — the decryption key is only returned to you, never stored on the server. Files are deleted after download or expire in 24 hours.</p>
-        </div>
+          <CodeBlock>{k(`# 1. Submit large merge job
+curl -H "X-API-Key: your-api-key" \\
+  -F "files=@huge1.csv" -F "files=@huge2.csv" \\
+  ${API_BASE}/v1/jobs/merge
 
-        {/* Code Examples */}
-        <section id="examples" className="space-y-6 scroll-mt-24">
-          <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <Code size={20} className="text-cyan-400" /> Code Examples
-          </h2>
+# Response:
+# {
+#   "jobId": "49e1ea...",
+#   "fileKey": "47ce12...",
+#   "downloadUrl": "/v1/jobs/49e1ea.../download?key=47ce12...",
+#   "expiresIn": "24 hours"
+# }
+
+# 2. Download the result
+curl -H "X-API-Key: your-api-key" \\
+  "${API_BASE}/v1/jobs/JOB_ID/download?key=FILE_KEY" > result.csv`)}</CodeBlock>
+
+          <div className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4 text-xs text-amber-200/70 space-y-1">
+            <p className="font-bold text-amber-400">Important</p>
+            <p>Save the <code className="text-amber-400">fileKey</code> — it is not stored on the server and cannot be recovered.</p>
+            <p>Downloads are one-time. The file is deleted after the first successful download.</p>
+          </div>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── CODE EXAMPLES ───────── */}
+        <section id="examples" className="scroll-mt-24 space-y-6">
+          <h2 className="text-2xl font-black text-white">Code Examples</h2>
 
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-white">Python</h3>
