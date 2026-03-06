@@ -30,15 +30,15 @@ app.get('/', (c) => c.json({
   ],
 }));
 
+// Key generation (no auth, but rate limited) — must be before /v1/* auth
+app.use('/v1/keys', rateLimiter);
+app.route('/v1/keys', keyRoutes);
+
 // API routes (with auth + rate limiting)
 app.use('/v1/*', apiKeyAuth);
 app.use('/v1/*', rateLimiter);
 app.route('/v1/csv', csvRoutes);
 app.route('/v1/jobs', jobRoutes);
-
-// Key generation (no auth, but rate limited)
-app.use('/v1/keys', rateLimiter);
-app.route('/v1/keys', keyRoutes);
 
 // Docs (no auth)
 app.route('/docs', docsRoutes);
