@@ -218,6 +218,24 @@ const OverviewPage = () => (
       </div>
     </div>
 
+    <div className="space-y-3">
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Security & Privacy</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-gray-900/50 border border-white/[0.06] rounded-xl p-4">
+          <p className="text-white font-bold text-xs mb-1.5">Zero Data Retention</p>
+          <p className="text-gray-400 text-xs leading-relaxed">Files are processed in memory and discarded immediately after the response. Nothing is stored on disk or logged.</p>
+        </div>
+        <div className="bg-gray-900/50 border border-white/[0.06] rounded-xl p-4">
+          <p className="text-white font-bold text-xs mb-1.5">End-to-End Encryption</p>
+          <p className="text-gray-400 text-xs leading-relaxed">All requests are served over HTTPS/TLS. Large file jobs use AES-256 encryption at rest — the decryption key is only returned to you, never stored on our servers.</p>
+        </div>
+        <div className="bg-gray-900/50 border border-white/[0.06] rounded-xl p-4">
+          <p className="text-white font-bold text-xs mb-1.5">No Third-Party Access</p>
+          <p className="text-gray-400 text-xs leading-relaxed">Your data never leaves the processing pipeline. No analytics, no third-party services, no sharing. API keys are hashed and cannot be recovered.</p>
+        </div>
+      </div>
+    </div>
+
     <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4 space-y-2">
       <p className="text-white font-bold text-xs">Errors</p>
       <p className="text-gray-400 text-xs">All errors return JSON with an <code className="text-cyan-400">error</code> field and an HTTP status code.</p>
