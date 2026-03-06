@@ -508,7 +508,8 @@ const AppContent: React.FC = () => {
         setVisitedTools(prev => new Set(prev).add(tool));
     }
     // Update URL
-    const newPath = tool ? `/${TOOL_TO_SLUG[tool]}` : '/';
+    const slug = tool === 'api-docs' ? 'api-docs' : TOOL_TO_SLUG[tool];
+    const newPath = tool ? `/${slug}` : '/';
     window.history.pushState(null, '', newPath);
     setActiveTool(tool);
   };
@@ -738,7 +739,6 @@ const AppContent: React.FC = () => {
                           {visitedTools.has('metadata') && <div className={activeTool === 'metadata' ? 'block h-full' : 'hidden h-full'}><MetadataTool /></div>}
                           {visitedTools.has('compressor') && <div className={activeTool === 'compressor' ? 'block h-full' : 'hidden h-full'}><CompressorTool /></div>}
                           {visitedTools.has('dashboard') && <div className={activeTool === 'dashboard' ? 'block h-full' : 'hidden h-full'}><InstantDashboardTool /></div>}
-                          {activeTool === 'api-docs' && <ApiDocs />}
                       </Suspense>
                   </div>
                 </main>

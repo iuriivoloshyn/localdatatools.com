@@ -9,7 +9,6 @@ const NAV_SECTIONS = [
   { id: 'csv', label: 'CSV Processing' },
   { id: 'convert', label: 'File Conversion' },
   { id: 'compress', label: 'Compression' },
-  { id: 'encrypted', label: 'Encrypted Jobs' },
   { id: 'examples', label: 'Code Examples' },
 ];
 
@@ -214,24 +213,9 @@ const ApiDocs: React.FC = () => {
           <h2 className="text-2xl font-black text-white flex items-center gap-3">
             <Zap size={20} className="text-cyan-400" /> Quick Start
           </h2>
-          <CodeBlock>{k(`# Set your API key
-API_KEY="your-api-key"
-
-# Merge two CSV files
-curl -H "X-API-Key: $API_KEY" \\
-  -F "files=@orders_jan.csv" \\
-  -F "files=@orders_feb.csv" \\
-  ${API_BASE}/v1/csv/merge > merged.csv
-
-# Convert PNG to WebP
-curl -H "X-API-Key: $API_KEY" \\
-  -F "file=@photo.png" -F "format=webp" \\
-  ${API_BASE}/v1/convert/image > photo.webp
-
-# Compress a log file
-curl -H "X-API-Key: $API_KEY" \\
-  -F "file=@access.log" -F "mode=gzip" \\
-  ${API_BASE}/v1/compress > access.log.gz`)}</CodeBlock>
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "files=@file1.csv" -F "files=@file2.csv" \\
+  ${API_BASE}/v1/csv/merge > merged.csv`)}</CodeBlock>
         </section>
 
         {/* Authentication */}
@@ -251,23 +235,41 @@ curl -H "X-API-Key: $API_KEY" \\
             <span className="text-xs font-medium text-gray-500 bg-gray-900 px-3 py-1 rounded-full">6 endpoints</span>
           </h2>
 
-          <EndpointCard method="POST" path="/v1/csv/merge" description="Stack multiple CSV files vertically. First file's headers are kept.">
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+          <EndpointCard method="POST" path="/v1/csv/merge" description="Stack multiple CSV files vertically. First file's headers are kept. For files over 50MB, use the encrypted /v1/jobs/merge endpoint (up to 1GB).">
+            <CodeBlock>{`# Direct merge (< 50MB)
+curl -H "X-API-Key: $API_KEY" \\
   -F "files=@file1.csv" -F "files=@file2.csv" \\
-  ${API_BASE}/v1/csv/merge > merged.csv`}</CodeBlock>
+  ${API_BASE}/v1/csv/merge > merged.csv
+
+# Large file merge via encrypted storage (up to 1GB)
+curl -H "X-API-Key: $API_KEY" \\
+  -F "files=@huge1.csv" -F "files=@huge2.csv" \\
+  ${API_BASE}/v1/jobs/merge
+# Returns: {"jobId": "...", "fileKey": "...", "downloadUrl": "..."}
+
+# Download encrypted result (one-time download)
+curl -H "X-API-Key: $API_KEY" \\
+  "${API_BASE}/v1/jobs/JOB_ID/download?key=FILE_KEY" > result.csv`}</CodeBlock>
           </EndpointCard>
 
-          <EndpointCard method="POST" path="/v1/csv/join" description="Left or inner join two CSVs on a key column.">
+          <EndpointCard method="POST" path="/v1/csv/join" description="Left or inner join two CSVs on a key column. For files over 50MB, use /v1/jobs/join (up to 1GB).">
             <ParamGrid params={[
               { name: 'left_key', desc: 'Column in left file' },
               { name: 'right_key', desc: 'Column in right file' },
               { name: 'join_type', desc: 'left | inner' },
               { name: 'case_sensitive', desc: 'true | false' },
             ]} />
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+            <CodeBlock>{`# Direct join (< 50MB)
+curl -H "X-API-Key: $API_KEY" \\
   -F "left=@employees.csv" -F "right=@salaries.csv" \\
   -F "left_key=id" -F "right_key=emp_id" \\
-  ${API_BASE}/v1/csv/join > joined.csv`}</CodeBlock>
+  ${API_BASE}/v1/csv/join > joined.csv
+
+# Large file join via encrypted storage (up to 1GB)
+curl -H "X-API-Key: $API_KEY" \\
+  -F "left=@big_left.csv" -F "right=@big_right.csv" \\
+  -F "left_key=id" -F "right_key=emp_id" \\
+  ${API_BASE}/v1/jobs/join`}</CodeBlock>
           </EndpointCard>
 
           <EndpointCard method="POST" path="/v1/csv/diff" description="Compare two CSV files. Returns added, removed, and changed rows.">
@@ -418,47 +420,11 @@ curl -H "X-API-Key: $API_KEY" \\
           </EndpointCard>
         </section>
 
-        {/* Encrypted Jobs */}
-        <section id="encrypted" className="space-y-6 scroll-mt-24">
-          <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <Shield size={20} className="text-cyan-400" /> Encrypted Large Files
-            <span className="text-xs font-medium text-gray-500 bg-gray-900 px-3 py-1 rounded-full">up to 1GB</span>
-          </h2>
-          <p className="text-gray-400">For files over 50MB. Results are encrypted with AES-256-GCM and stored temporarily in Cloudflare R2. The decryption key is only returned to you — never stored on the server.</p>
-
-          <EndpointCard method="POST" path="/v1/jobs/merge" description="Submit a large merge job. Returns a jobId and fileKey for download.">
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "files=@huge1.csv" -F "files=@huge2.csv" \\
-  ${API_BASE}/v1/jobs/merge
-
-# {"jobId": "86beaa3a...", "fileKey": "a9cb85aa...",
-#  "downloadUrl": "/v1/jobs/86beaa.../download?key=a9cb85...",
-#  "expiresIn": "24 hours"}`}</CodeBlock>
-          </EndpointCard>
-
-          <EndpointCard method="POST" path="/v1/jobs/join" description="Large file join via encrypted storage. Same params as /v1/csv/join.">
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "left=@big_left.csv" -F "right=@big_right.csv" \\
-  -F "left_key=id" -F "right_key=emp_id" \\
-  ${API_BASE}/v1/jobs/join`}</CodeBlock>
-          </EndpointCard>
-
-          <EndpointCard method="GET" path="/v1/jobs/:id/download?key=..." description="Download and decrypt. One-time download — file is deleted after retrieval.">
-            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  "${API_BASE}/v1/jobs/JOB_ID/download?key=FILE_KEY" > result.csv`}</CodeBlock>
-          </EndpointCard>
-
-          <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-xl p-5 space-y-2">
-            <h4 className="text-cyan-400 font-bold text-sm flex items-center gap-2"><Lock size={14} /> Privacy Guarantees</h4>
-            <ul className="text-gray-400 text-sm space-y-1">
-              <li>Files encrypted with per-file random key (AES-256-GCM)</li>
-              <li>Encryption key only returned to you — never stored on our servers</li>
-              <li>Stored files are unreadable without the key, even by the server operator</li>
-              <li>Files deleted after download (one-time download)</li>
-              <li>Undownloaded files expire after 24 hours</li>
-            </ul>
-          </div>
-        </section>
+        {/* Encrypted Storage Note */}
+        <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-xl p-5 space-y-2">
+          <h4 className="text-cyan-400 font-bold text-sm flex items-center gap-2"><Lock size={14} /> Large File Encryption (merge & join)</h4>
+          <p className="text-gray-400 text-sm">Files over 50MB use <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">/v1/jobs/*</code> endpoints. Results are encrypted with AES-256-GCM and stored temporarily — the decryption key is only returned to you, never stored on the server. Files are deleted after download or expire in 24 hours.</p>
+        </div>
 
         {/* Code Examples */}
         <section id="examples" className="space-y-6 scroll-mt-24">
