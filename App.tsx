@@ -18,6 +18,7 @@ const MetadataTool = React.lazy(() => import('./components/tools/MetadataTool'))
 const AiChatTool = React.lazy(() => import('./components/tools/AiChatTool'));
 const CompressorTool = React.lazy(() => import('./components/tools/CompressorTool'));
 const InstantDashboardTool = React.lazy(() => import('./components/tools/InstantDashboardTool'));
+const ApiDocs = React.lazy(() => import('./components/ApiDocs'));
 
 // Expanded Context
 const AppContext = createContext<{ 
@@ -270,8 +271,30 @@ const AppContent: React.FC = () => {
   const { lang, setLang, t, isProMode, setIsProMode } = useLanguage();
   const { downloadModelOnly, progressVal: modelProgress, isLoading: modelLoading } = useGemma();
   
-  const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | null>(null);
-  const [visitedTools, setVisitedTools] = useState<Set<string>>(new Set());
+  // URL-based routing: map path slugs to tool IDs
+  const TOOL_SLUGS: Record<string, ToolType | 'dashboard'> = {
+    'dashboard': 'dashboard', 'csv-fusion': 'merge', 'csv-diff': 'diff',
+    'smart-csv-editor': 'ai-csv-editor', 'ocr': 'ocr', 'converter': 'converter',
+    'viewer': 'viewer', 'anonymizer': 'anonymizer', 'metadata': 'metadata',
+    'compressor': 'compressor', 'ai-chat': 'chat',
+  };
+  const TOOL_TO_SLUG = Object.fromEntries(
+    Object.entries(TOOL_SLUGS).map(([slug, id]) => [id, slug])
+  );
+
+  const getToolFromPath = (): ToolType | 'dashboard' | 'api-docs' | null => {
+    const slug = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+    if (slug === 'api-docs') return 'api-docs';
+    return slug ? (TOOL_SLUGS[slug] || null) : null;
+  };
+
+  const initialTool = getToolFromPath();
+  const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | 'api-docs' | null>(initialTool);
+  const [visitedTools, setVisitedTools] = useState<Set<string>>(() => {
+    const set = new Set<string>();
+    if (initialTool) set.add(initialTool);
+    return set;
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFeatureRequestOpen, setIsFeatureRequestOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -460,11 +483,33 @@ const AppContent: React.FC = () => {
     return () => { document.body.style.overflow = ''; };
   }, [isZenMode]);
 
+  // Sync browser back/forward with tool state
+  useEffect(() => {
+    const onPopState = () => {
+      const tool = getToolFromPath();
+      if (tool) setVisitedTools(prev => new Set(prev).add(tool));
+      setActiveTool(tool);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // Update document title when tool changes
+  useEffect(() => {
+    const toolConfig = TOOLS_LIST.find(t => t.id === activeTool);
+    document.title = toolConfig
+      ? `${toolConfig.label} — Local Data Tools`
+      : 'Local Data Tools — Free Browser-Based CSV, OCR & File Processing';
+  }, [activeTool]);
+
   const handleToolClick = (tool: ToolType | 'dashboard' | null) => {
     if (tool === activeTool) return;
     if (tool) {
         setVisitedTools(prev => new Set(prev).add(tool));
     }
+    // Update URL
+    const newPath = tool ? `/${TOOL_TO_SLUG[tool]}` : '/';
+    window.history.pushState(null, '', newPath);
     setActiveTool(tool);
   };
 
@@ -686,6 +731,7 @@ const AppContent: React.FC = () => {
                           {visitedTools.has('metadata') && <div className={activeTool === 'metadata' ? 'block h-full' : 'hidden h-full'}><MetadataTool /></div>}
                           {visitedTools.has('compressor') && <div className={activeTool === 'compressor' ? 'block h-full' : 'hidden h-full'}><CompressorTool /></div>}
                           {visitedTools.has('dashboard') && <div className={activeTool === 'dashboard' ? 'block h-full' : 'hidden h-full'}><InstantDashboardTool /></div>}
+                          {activeTool === 'api-docs' && <ApiDocs />}
                       </Suspense>
                   </div>
                 </main>
