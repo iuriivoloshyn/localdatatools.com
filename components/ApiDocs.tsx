@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, ExternalLink, Lock, Zap, FileText, Shield, Code, Key, Loader2 } from 'lucide-react';
+import { Copy, Check, ExternalLink, Lock, Zap, FileText, Shield, Code, Key, Loader2, FileSpreadsheet, Image, Music, Archive } from 'lucide-react';
 
 const API_BASE = 'https://api.localdatatools.com';
 
 const NAV_SECTIONS = [
   { id: 'quick-start', label: 'Quick Start' },
   { id: 'authentication', label: 'Authentication' },
-  { id: 'direct', label: 'Direct Processing' },
+  { id: 'csv', label: 'CSV Processing' },
+  { id: 'convert', label: 'File Conversion' },
+  { id: 'compress', label: 'Compression' },
   { id: 'encrypted', label: 'Encrypted Jobs' },
-  { id: 'coming-soon', label: 'Coming Soon' },
   { id: 'examples', label: 'Code Examples' },
 ];
 
@@ -33,14 +34,25 @@ const CodeBlock = ({ children }: { children: string }) => {
 
 const EndpointCard = ({ method, path, description, children }: { method: string; path: string; description: string; children?: React.ReactNode }) => (
   <div className="bg-gray-900/50 border border-white/[0.06] rounded-2xl overflow-hidden">
-    <div className="p-6 border-b border-white/[0.06]">
-      <div className="flex items-center gap-3 mb-2">
+    <div className="p-5 border-b border-white/[0.06]">
+      <div className="flex items-center gap-3 mb-1.5">
         <span className={`px-2.5 py-1 rounded-lg text-xs font-black tracking-wider ${method === 'POST' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>{method}</span>
         <code className="text-white font-mono text-sm">{path}</code>
       </div>
-      <p className="text-gray-400 text-sm mt-2">{description}</p>
+      <p className="text-gray-400 text-sm">{description}</p>
     </div>
-    {children && <div className="p-6">{children}</div>}
+    {children && <div className="p-5">{children}</div>}
+  </div>
+);
+
+const ParamGrid = ({ params }: { params: { name: string; desc: string }[] }) => (
+  <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+    {params.map(({ name, desc }) => (
+      <div key={name} className="bg-gray-950 rounded-lg p-2.5 border border-white/[0.06]">
+        <span className="text-gray-500">{name}</span>
+        <span className="text-white ml-2">{desc}</span>
+      </div>
+    ))}
   </div>
 );
 
@@ -121,7 +133,6 @@ const ApiDocs: React.FC = () => {
   const [activeSection, setActiveSection] = useState('quick-start');
   const [generatedKey, setGeneratedKey] = useState('');
 
-  // Helper: replace placeholder key in code examples with real key
   const k = (code: string) => generatedKey ? code.replace(/your-api-key|your-key/g, generatedKey) : code;
 
   useEffect(() => {
@@ -177,11 +188,11 @@ const ApiDocs: React.FC = () => {
             <h1 className="text-3xl font-black text-white">API Documentation</h1>
           </div>
           <p className="text-gray-400 text-lg max-w-2xl leading-relaxed">
-            Privacy-first file processing via simple HTTP calls. Merge, join, and analyze files programmatically. Large files encrypted with AES-256-GCM.
+            Privacy-first file processing via simple HTTP calls. CSV tools, file conversion, compression, and encrypted large file storage.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
             {[
-              { icon: Zap, title: 'Fast', desc: 'Streaming for files under 50MB' },
+              { icon: Zap, title: '14 Endpoints', desc: 'CSV, images, audio, documents, compression' },
               { icon: Shield, title: 'Encrypted', desc: 'AES-256-GCM zero-knowledge storage' },
               { icon: Lock, title: 'Authenticated', desc: 'API key + 30 req/min rate limit' },
             ].map(({ icon: Icon, title, desc }) => (
@@ -210,7 +221,17 @@ API_KEY="your-api-key"
 curl -H "X-API-Key: $API_KEY" \\
   -F "files=@orders_jan.csv" \\
   -F "files=@orders_feb.csv" \\
-  ${API_BASE}/v1/csv/merge > merged.csv`)}</CodeBlock>
+  ${API_BASE}/v1/csv/merge > merged.csv
+
+# Convert PNG to WebP
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@photo.png" -F "format=webp" \\
+  ${API_BASE}/v1/convert/image > photo.webp
+
+# Compress a log file
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@access.log" -F "mode=gzip" \\
+  ${API_BASE}/v1/compress > access.log.gz`)}</CodeBlock>
         </section>
 
         {/* Authentication */}
@@ -223,64 +244,177 @@ curl -H "X-API-Key: $API_KEY" \\
           <p className="text-gray-500 text-sm">Rate limit: 30 requests per minute per key.</p>
         </section>
 
-        {/* Direct Processing */}
-        <section id="direct" className="space-y-6 scroll-mt-24">
+        {/* CSV Processing */}
+        <section id="csv" className="space-y-6 scroll-mt-24">
           <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <FileText size={20} className="text-cyan-400" /> Direct Processing
-            <span className="text-xs font-medium text-gray-500 bg-gray-900 px-3 py-1 rounded-full">&lt; 50MB</span>
+            <FileText size={20} className="text-cyan-400" /> CSV Processing
+            <span className="text-xs font-medium text-gray-500 bg-gray-900 px-3 py-1 rounded-full">6 endpoints</span>
           </h2>
 
-          <EndpointCard method="POST" path="/v1/csv/merge" description="Stack multiple CSV files vertically. First file's headers are kept; subsequent headers are skipped.">
+          <EndpointCard method="POST" path="/v1/csv/merge" description="Stack multiple CSV files vertically. First file's headers are kept.">
             <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "files=@file1.csv" \\
-  -F "files=@file2.csv" \\
-  -F "files=@file3.csv" \\
-  ${API_BASE}/v1/csv/merge`}</CodeBlock>
+  -F "files=@file1.csv" -F "files=@file2.csv" \\
+  ${API_BASE}/v1/csv/merge > merged.csv`}</CodeBlock>
           </EndpointCard>
 
-          <EndpointCard method="POST" path="/v1/csv/join" description="Left or inner join on a key column. Supports case-insensitive matching.">
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-gray-950 rounded-lg p-3 border border-white/[0.06]">
-                  <span className="text-gray-500">left_key</span>
-                  <span className="text-white ml-2">Column name in left file</span>
-                </div>
-                <div className="bg-gray-950 rounded-lg p-3 border border-white/[0.06]">
-                  <span className="text-gray-500">right_key</span>
-                  <span className="text-white ml-2">Column name in right file</span>
-                </div>
-                <div className="bg-gray-950 rounded-lg p-3 border border-white/[0.06]">
-                  <span className="text-gray-500">join_type</span>
-                  <span className="text-white ml-2">left (default) | inner</span>
-                </div>
-                <div className="bg-gray-950 rounded-lg p-3 border border-white/[0.06]">
-                  <span className="text-gray-500">case_sensitive</span>
-                  <span className="text-white ml-2">true (default) | false</span>
-                </div>
-              </div>
-              <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "left=@employees.csv" \\
-  -F "right=@salaries.csv" \\
-  -F "left_key=id" \\
-  -F "right_key=emp_id" \\
-  -F "join_type=left" \\
-  ${API_BASE}/v1/csv/join`}</CodeBlock>
-            </div>
+          <EndpointCard method="POST" path="/v1/csv/join" description="Left or inner join two CSVs on a key column.">
+            <ParamGrid params={[
+              { name: 'left_key', desc: 'Column in left file' },
+              { name: 'right_key', desc: 'Column in right file' },
+              { name: 'join_type', desc: 'left | inner' },
+              { name: 'case_sensitive', desc: 'true | false' },
+            ]} />
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+  -F "left=@employees.csv" -F "right=@salaries.csv" \\
+  -F "left_key=id" -F "right_key=emp_id" \\
+  ${API_BASE}/v1/csv/join > joined.csv`}</CodeBlock>
+          </EndpointCard>
+
+          <EndpointCard method="POST" path="/v1/csv/diff" description="Compare two CSV files. Returns added, removed, and changed rows.">
+            <ParamGrid params={[
+              { name: 'left', desc: 'Original CSV file' },
+              { name: 'right', desc: 'Updated CSV file' },
+              { name: 'key', desc: 'Optional key column for row matching' },
+            ]} />
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+  -F "left=@v1.csv" -F "right=@v2.csv" -F "key=id" \\
+  ${API_BASE}/v1/csv/diff
+
+# {"summary": {"added": 5, "removed": 2, "changed": 3, "unchanged": 100}}`}</CodeBlock>
+          </EndpointCard>
+
+          <EndpointCard method="POST" path="/v1/csv/metadata" description="Extract column types, row counts, null rates, and summary statistics.">
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@data.csv" \\
+  ${API_BASE}/v1/csv/metadata
+
+# {"rowCount": 1000, "columns": [
+#   {"header": "age", "type": "integer", "min": 18, "max": 65, "mean": 34.2},
+#   {"header": "email", "type": "string", "nullRate": 0.02, "unique": 980}
+# ]}`}</CodeBlock>
+          </EndpointCard>
+
+          <EndpointCard method="POST" path="/v1/csv/anonymize" description="Auto-detect and mask PII — emails, phones, names, SSNs, addresses.">
+            <ParamGrid params={[
+              { name: 'columns', desc: 'Comma-separated columns (auto-detect if omitted)' },
+              { name: 'mode', desc: 'mask (default) | redact' },
+            ]} />
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@users.csv" -F "mode=mask" \\
+  ${API_BASE}/v1/csv/anonymize > anonymized.csv
+
+# alice@test.com → a***@test.com
+# 555-123-4567  → 5**********7`}</CodeBlock>
           </EndpointCard>
 
           <EndpointCard method="POST" path="/v1/csv/analyze" description="Check if files have compatible headers before merging.">
             <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
-  -F "files=@file1.csv" \\
-  -F "files=@file2.csv" \\
-  ${API_BASE}/v1/csv/analyze
+  -F "files=@file1.csv" -F "files=@file2.csv" \\
+  ${API_BASE}/v1/csv/analyze`}</CodeBlock>
+          </EndpointCard>
+        </section>
 
-# Response:
-# {
-#   "primary": "file1.csv",
-#   "primaryHeaders": ["id", "name", "score"],
-#   "results": [{ "file": "file2.csv", "compatible": true }],
-#   "canMerge": true
-# }`}</CodeBlock>
+        {/* File Conversion */}
+        <section id="convert" className="space-y-6 scroll-mt-24">
+          <h2 className="text-2xl font-black text-white flex items-center gap-3">
+            <FileSpreadsheet size={20} className="text-cyan-400" /> File Conversion
+            <span className="text-xs font-medium text-gray-500 bg-gray-900 px-3 py-1 rounded-full">4 endpoints</span>
+          </h2>
+
+          <EndpointCard method="POST" path="/v1/convert/spreadsheet" description="CSV to Excel or Excel to CSV. Auto-detects direction from file extension.">
+            <ParamGrid params={[
+              { name: 'file', desc: '.csv, .tsv, .xlsx, or .xls' },
+              { name: 'sheet', desc: 'Sheet name for Excel input (optional)' },
+            ]} />
+            <CodeBlock>{`# CSV → Excel
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@data.csv" \\
+  ${API_BASE}/v1/convert/spreadsheet > data.xlsx
+
+# Excel → CSV
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@report.xlsx" -F "sheet=Sales" \\
+  ${API_BASE}/v1/convert/spreadsheet > report.csv`}</CodeBlock>
+          </EndpointCard>
+
+          <EndpointCard method="POST" path="/v1/convert/image" description="Convert between PNG, JPEG, WebP, AVIF, TIFF, GIF. Optional resize.">
+            <ParamGrid params={[
+              { name: 'format', desc: 'png, jpeg, webp, avif, tiff, gif' },
+              { name: 'quality', desc: '1-100 (default 80)' },
+              { name: 'width', desc: 'Resize width (optional)' },
+              { name: 'height', desc: 'Resize height (optional)' },
+            ]} />
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@photo.png" -F "format=webp" -F "quality=85" \\
+  ${API_BASE}/v1/convert/image > photo.webp
+
+# Resize to 800px wide
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@banner.jpg" -F "format=png" -F "width=800" \\
+  ${API_BASE}/v1/convert/image > banner.png`}</CodeBlock>
+          </EndpointCard>
+
+          <EndpointCard method="POST" path="/v1/convert/document" description="Extract text from PDF. Output as plain text, DOCX, or structured JSON.">
+            <ParamGrid params={[
+              { name: 'file', desc: 'PDF file' },
+              { name: 'format', desc: 'txt (default), docx, json' },
+            ]} />
+            <CodeBlock>{`# PDF → text
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@document.pdf" -F "format=txt" \\
+  ${API_BASE}/v1/convert/document > document.txt
+
+# PDF → DOCX
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@document.pdf" -F "format=docx" \\
+  ${API_BASE}/v1/convert/document > document.docx`}</CodeBlock>
+          </EndpointCard>
+
+          <EndpointCard method="POST" path="/v1/convert/audio" description="Convert between MP3, WAV, FLAC, AAC, OGG, WebM, WMA, M4A via FFmpeg.">
+            <ParamGrid params={[
+              { name: 'file', desc: 'Audio file' },
+              { name: 'format', desc: 'mp3, wav, flac, aac, ogg, webm, wma, m4a' },
+            ]} />
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@recording.wav" -F "format=mp3" \\
+  ${API_BASE}/v1/convert/audio > recording.mp3`}</CodeBlock>
+          </EndpointCard>
+        </section>
+
+        {/* Compression */}
+        <section id="compress" className="space-y-6 scroll-mt-24">
+          <h2 className="text-2xl font-black text-white flex items-center gap-3">
+            <Archive size={20} className="text-cyan-400" /> Compression
+          </h2>
+          <p className="text-gray-400 text-sm">Three modes in one endpoint: <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">gzip</code> for single files, <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">zip</code> for archives, <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">image</code> for lossy image optimization.</p>
+
+          <EndpointCard method="POST" path="/v1/compress" description="Compress or decompress files. Mode determines behavior.">
+            <ParamGrid params={[
+              { name: 'mode', desc: 'gzip | zip | image' },
+              { name: 'file', desc: 'File (for gzip/image)' },
+              { name: 'files', desc: 'Multiple files (for zip)' },
+              { name: 'action', desc: 'compress | decompress (gzip only)' },
+              { name: 'quality', desc: '1-100 (image mode, default 70)' },
+            ]} />
+            <CodeBlock>{`# GZIP a file
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@access.log" -F "mode=gzip" \\
+  ${API_BASE}/v1/compress > access.log.gz
+
+# Decompress
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@access.log.gz" -F "mode=gzip" -F "action=decompress" \\
+  ${API_BASE}/v1/compress > access.log
+
+# ZIP multiple files
+curl -H "X-API-Key: $API_KEY" \\
+  -F "files=@file1.csv" -F "files=@file2.csv" -F "mode=zip" \\
+  ${API_BASE}/v1/compress > archive.zip
+
+# Lossy image compression
+curl -H "X-API-Key: $API_KEY" \\
+  -F "file=@photo.jpg" -F "mode=image" -F "quality=60" \\
+  ${API_BASE}/v1/compress > photo_small.jpg`}</CodeBlock>
           </EndpointCard>
         </section>
 
@@ -293,24 +427,24 @@ curl -H "X-API-Key: $API_KEY" \\
           <p className="text-gray-400">For files over 50MB. Results are encrypted with AES-256-GCM and stored temporarily in Cloudflare R2. The decryption key is only returned to you — never stored on the server.</p>
 
           <EndpointCard method="POST" path="/v1/jobs/merge" description="Submit a large merge job. Returns a jobId and fileKey for download.">
-            <CodeBlock>{`# Step 1: Submit the job
-curl -H "X-API-Key: $API_KEY" \\
-  -F "files=@huge_file1.csv" \\
-  -F "files=@huge_file2.csv" \\
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+  -F "files=@huge1.csv" -F "files=@huge2.csv" \\
   ${API_BASE}/v1/jobs/merge
 
-# Response:
-# {
-#   "jobId": "86beaa3a...",
-#   "fileKey": "a9cb85aa...",
-#   "downloadUrl": "/v1/jobs/86beaa.../download?key=a9cb85...",
-#   "expiresIn": "24 hours"
-# }`}</CodeBlock>
+# {"jobId": "86beaa3a...", "fileKey": "a9cb85aa...",
+#  "downloadUrl": "/v1/jobs/86beaa.../download?key=a9cb85...",
+#  "expiresIn": "24 hours"}`}</CodeBlock>
+          </EndpointCard>
+
+          <EndpointCard method="POST" path="/v1/jobs/join" description="Large file join via encrypted storage. Same params as /v1/csv/join.">
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
+  -F "left=@big_left.csv" -F "right=@big_right.csv" \\
+  -F "left_key=id" -F "right_key=emp_id" \\
+  ${API_BASE}/v1/jobs/join`}</CodeBlock>
           </EndpointCard>
 
           <EndpointCard method="GET" path="/v1/jobs/:id/download?key=..." description="Download and decrypt. One-time download — file is deleted after retrieval.">
-            <CodeBlock>{`# Step 2: Download the decrypted result
-curl -H "X-API-Key: $API_KEY" \\
+            <CodeBlock>{`curl -H "X-API-Key: $API_KEY" \\
   "${API_BASE}/v1/jobs/JOB_ID/download?key=FILE_KEY" > result.csv`}</CodeBlock>
           </EndpointCard>
 
@@ -326,45 +460,6 @@ curl -H "X-API-Key: $API_KEY" \\
           </div>
         </section>
 
-        {/* Coming Soon */}
-        <section id="coming-soon" className="space-y-6 scroll-mt-24">
-          <h2 className="text-2xl font-black text-white flex items-center gap-3">
-            <Zap size={20} className="text-cyan-400" /> Coming Soon
-          </h2>
-          <p className="text-gray-400 text-sm">These endpoints are in development. All tools available on <a href="https://localdatatools.com" className="text-cyan-400 hover:underline">localdatatools.com</a> are being brought to the API.</p>
-          <div className="space-y-3">
-            {[
-              { category: 'File Conversion', endpoints: [
-                { method: 'POST', path: '/v1/convert/spreadsheet', desc: 'CSV ↔ Excel (xlsx, xls) — bidirectional conversion' },
-                { method: 'POST', path: '/v1/convert/document', desc: 'DOCX → PDF, PDF → DOCX, PDF → images (PNG)' },
-                { method: 'POST', path: '/v1/convert/image', desc: 'Convert between PNG, JPEG, WebP, SVG, HEIC — or to PDF' },
-                { method: 'POST', path: '/v1/convert/audio', desc: 'Convert between MP3, WAV, FLAC, AAC, OGG, WebM, WMA' },
-                { method: 'POST', path: '/v1/compress', desc: 'Compress or decompress files (gzip, zip)' },
-              ]},
-              { category: 'Data Processing', endpoints: [
-                { method: 'POST', path: '/v1/csv/diff', desc: 'Compare two CSV files — returns added, removed, and changed rows' },
-                { method: 'POST', path: '/v1/csv/anonymize', desc: 'Mask or replace PII (emails, names, phone numbers) in CSV columns' },
-                { method: 'POST', path: '/v1/csv/metadata', desc: 'Extract column types, row counts, null rates, and summary statistics' },
-              ]},
-            ].map(({ category, endpoints }) => (
-              <div key={category}>
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 px-1">{category}</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {endpoints.map(({ method, path, desc }) => (
-                    <div key={path} className="bg-gray-900/30 border border-white/[0.04] rounded-xl p-4 opacity-50 hover:opacity-70 transition-opacity">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-black tracking-wider bg-gray-800 text-gray-500 border border-white/[0.06]">{method}</span>
-                        <code className="text-gray-400 font-mono text-xs">{path}</code>
-                      </div>
-                      <p className="text-gray-500 text-xs">{desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
         {/* Code Examples */}
         <section id="examples" className="space-y-6 scroll-mt-24">
           <h2 className="text-2xl font-black text-white flex items-center gap-3">
@@ -377,40 +472,54 @@ curl -H "X-API-Key: $API_KEY" \\
 
 API_KEY = "your-key"
 BASE = "${API_BASE}"
+headers = {"X-API-Key": API_KEY}
 
-# Merge
-files = [
-    ("files", open("file1.csv", "rb")),
-    ("files", open("file2.csv", "rb")),
-]
-r = requests.post(f"{BASE}/v1/csv/merge",
-    headers={"X-API-Key": API_KEY}, files=files)
+# Merge CSVs
+r = requests.post(f"{BASE}/v1/csv/merge", headers=headers,
+    files=[("files", open("f1.csv","rb")), ("files", open("f2.csv","rb"))])
+open("merged.csv","w").write(r.text)
 
-with open("merged.csv", "w") as f:
-    f.write(r.text)
+# Convert image
+r = requests.post(f"{BASE}/v1/convert/image", headers=headers,
+    files={"file": open("photo.png","rb")}, data={"format": "webp"})
+open("photo.webp","wb").write(r.content)
 
-# Join
-r = requests.post(f"{BASE}/v1/csv/join",
-    headers={"X-API-Key": API_KEY},
-    files={"left": open("a.csv", "rb"), "right": open("b.csv", "rb")},
-    data={"left_key": "id", "right_key": "emp_id", "join_type": "left"})
+# Anonymize CSV
+r = requests.post(f"{BASE}/v1/csv/anonymize", headers=headers,
+    files={"file": open("users.csv","rb")}, data={"mode": "redact"})
+open("safe.csv","w").write(r.text)
 
-with open("joined.csv", "w") as f:
-    f.write(r.text)`)}</CodeBlock>
+# Get CSV stats
+r = requests.post(f"{BASE}/v1/csv/metadata", headers=headers,
+    files={"file": open("data.csv","rb")})
+print(r.json()["columns"])`)}</CodeBlock>
           </div>
 
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-white">JavaScript / Node.js</h3>
-            <CodeBlock>{k(`const form = new FormData();
-form.append("files", new Blob([csv1]), "file1.csv");
-form.append("files", new Blob([csv2]), "file2.csv");
+            <CodeBlock>{k(`const API_KEY = "your-key";
+const BASE = "${API_BASE}";
 
-const res = await fetch("${API_BASE}/v1/csv/merge", {
+// Merge CSVs
+const form = new FormData();
+form.append("files", new Blob([csv1]), "f1.csv");
+form.append("files", new Blob([csv2]), "f2.csv");
+const res = await fetch(\`\${BASE}/v1/csv/merge\`, {
   method: "POST",
-  headers: { "X-API-Key": "your-key" },
+  headers: { "X-API-Key": API_KEY },
   body: form,
 });
-const merged = await res.text();`)}</CodeBlock>
+const merged = await res.text();
+
+// Convert audio
+const audioForm = new FormData();
+audioForm.append("file", audioBlob, "recording.wav");
+audioForm.append("format", "mp3");
+const mp3 = await fetch(\`\${BASE}/v1/convert/audio\`, {
+  method: "POST",
+  headers: { "X-API-Key": API_KEY },
+  body: audioForm,
+}).then(r => r.blob());`)}</CodeBlock>
           </div>
         </section>
 
