@@ -140,7 +140,7 @@ jobRoutes.get('/:id/download', async (c) => {
     // Delete after download (one-time download)
     deleteFile(jobId).catch(() => {}); // fire-and-forget cleanup
 
-    return new Response(decrypted, {
+    return new Response(new Uint8Array(decrypted), {
       headers: {
         'Content-Type': 'text/csv',
         'Content-Disposition': `attachment; filename="${jobId}.csv"`,
