@@ -1,16 +1,33 @@
 import type { MiddlewareHandler } from 'hono';
+import { getValidKeys } from '../services/keys.js';
 
-// In-memory key store. Replace with DB lookup for production.
-// Set API_KEYS env var with comma-separated keys. "demo-key-123" is only for local dev.
+// Static keys from env var (fallback / admin keys)
 const rawKeys = process.env.API_KEYS || (process.env.NODE_ENV === 'production' ? '' : 'demo-key-123');
-const API_KEYS = new Set(rawKeys.split(',').map(k => k.trim()).filter(Boolean));
+const STATIC_KEYS = new Set(rawKeys.split(',').map(k => k.trim()).filter(Boolean));
 
 export const apiKeyAuth: MiddlewareHandler = async (c, next) => {
   const key = c.req.header('X-API-Key') || c.req.query('api_key');
 
-  if (!key || !API_KEYS.has(key)) {
-    return c.json({ error: 'Invalid or missing API key. Pass X-API-Key header.' }, 401);
+  if (!key) {
+    return c.json({ error: 'Missing API key. Pass X-API-Key header.' }, 401);
   }
 
-  await next();
+  // Check static keys first (fast path)
+  if (STATIC_KEYS.has(key)) {
+    await next();
+    return;
+  }
+
+  // Check R2-stored keys
+  try {
+    const dynamicKeys = await getValidKeys();
+    if (dynamicKeys.has(key)) {
+      await next();
+      return;
+    }
+  } catch {
+    // R2 unavailable — fall through to rejection
+  }
+
+  return c.json({ error: 'Invalid API key.' }, 401);
 };

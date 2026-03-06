@@ -6,6 +6,7 @@ import { rateLimiter } from './middleware/rateLimit.js';
 import { csvRoutes } from './routes/csv.js';
 import { jobRoutes } from './routes/jobs.js';
 import { docsRoutes } from './routes/docs.js';
+import { keyRoutes } from './routes/keys.js';
 import { serve } from '@hono/node-server';
 
 const app = new Hono();
@@ -34,6 +35,10 @@ app.use('/v1/*', apiKeyAuth);
 app.use('/v1/*', rateLimiter);
 app.route('/v1/csv', csvRoutes);
 app.route('/v1/jobs', jobRoutes);
+
+// Key generation (no auth, but rate limited)
+app.use('/v1/keys', rateLimiter);
+app.route('/v1/keys', keyRoutes);
 
 // Docs (no auth)
 app.route('/docs', docsRoutes);
