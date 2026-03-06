@@ -194,23 +194,7 @@ const OPENAPI_SPEC = {
 // JSON spec
 docsRoutes.get('/openapi.json', (c) => c.json(OPENAPI_SPEC));
 
-// Simple HTML docs page using Swagger UI CDN
+// Redirect /docs to website docs page
 docsRoutes.get('/', (c) => {
-  return c.html(`<!DOCTYPE html>
-<html><head>
-  <title>LocalDataTools API Docs</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
-  <style>
-    body { background: #0a0a0a; }
-    .swagger-ui { max-width: 960px; margin: 0 auto; }
-    .swagger-ui .topbar { display: none; }
-    .swagger-ui .info { margin: 30px 0; }
-  </style>
-</head><body>
-  <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-  <script>
-    SwaggerUIBundle({ url: '/docs/openapi.json', dom_id: '#swagger-ui', deepLinking: true });
-  </script>
-</body></html>`);
+  return c.redirect('https://localdatatools.com/api-docs');
 });
