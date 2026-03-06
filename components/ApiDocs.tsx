@@ -653,6 +653,55 @@ const mp3 = await fetch(\`\${BASE}/v1/convert/audio\`, {
   </div>
 );
 
+// ─── SEO metadata per page ───
+
+const PAGE_SEO: Record<string, { title: string; description: string }> = {
+  'overview': {
+    title: 'API Documentation — Local Data Tools',
+    description: 'Local Data Tools API documentation. Process files programmatically — merge CSVs, convert images, audio, documents, compress files, and anonymize data. RESTful API with 15 endpoints.',
+  },
+  'api-key': {
+    title: 'API Key — Local Data Tools API',
+    description: 'Generate a free API key for Local Data Tools API. No sign-up required. Authenticate requests with X-API-Key header.',
+  },
+  'csv-merge-join': {
+    title: 'CSV Merge & Join API — Local Data Tools',
+    description: 'Merge, join, and analyze CSV files via API. Stack CSVs vertically, join on key columns, check header compatibility, extract metadata. Up to 1GB with async jobs.',
+  },
+  'csv-compare': {
+    title: 'CSV Compare API — Local Data Tools',
+    description: 'Compare two CSV files via API. Detect added, removed, and changed rows. Key-based or row-based diff with detailed JSON output.',
+  },
+  'csv-anonymize': {
+    title: 'CSV Anonymize & Restore API — Local Data Tools',
+    description: 'Anonymize CSV data via API with reversible mapping. Replace values with pseudonyms, shuffle columns, and restore with a key file. GDPR-friendly data masking.',
+  },
+  'convert-spreadsheet': {
+    title: 'Spreadsheet Conversion API — CSV to Excel, Excel to CSV',
+    description: 'Convert CSV to Excel (XLSX) and Excel to CSV via API. Auto-detect format direction. Multi-sheet support for Excel files.',
+  },
+  'convert-image': {
+    title: 'Image Conversion API — PNG, JPEG, WebP, AVIF, TIFF, GIF',
+    description: 'Convert images between PNG, JPEG, WebP, AVIF, TIFF, and GIF via API. Resize, set quality, and optimize images server-side.',
+  },
+  'convert-document': {
+    title: 'Document Conversion API — PDF to Text, DOCX, JSON',
+    description: 'Extract text from PDFs, convert PDF to DOCX or JSON via API. Server-side document processing with page count metadata.',
+  },
+  'convert-audio': {
+    title: 'Audio Conversion API — MP3, WAV, FLAC, AAC, OGG',
+    description: 'Convert audio files between MP3, WAV, FLAC, AAC, OGG, WebM, WMA, and M4A via API. FFmpeg-powered server-side conversion.',
+  },
+  'compression': {
+    title: 'File Compression API — Gzip, ZIP, Image Optimization',
+    description: 'Compress files via API. Gzip single files, create ZIP archives, or optimize images with lossy compression. Decompress gzip files.',
+  },
+  'examples': {
+    title: 'Code Examples — Local Data Tools API',
+    description: 'Python and JavaScript code examples for Local Data Tools API. Ready-to-use snippets for CSV merge, image conversion, audio processing, and more.',
+  },
+};
+
 // ─── Page map ───
 
 const PAGES: Record<string, React.FC<{ k: (s: string) => string; generatedKey: string; setGeneratedKey: (k: string) => void }>> = {
@@ -694,6 +743,22 @@ const ApiDocs: React.FC = () => {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
+
+  // Update document title, meta description, and canonical URL per page
+  useEffect(() => {
+    const seo = PAGE_SEO[activePage] || PAGE_SEO['overview'];
+    document.title = seo.title;
+
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute('content', seo.description);
+
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+    if (canonical) {
+      canonical.href = activePage === 'overview'
+        ? 'https://localdatatools.com/api-docs'
+        : `https://localdatatools.com/api-docs/${activePage}`;
+    }
+  }, [activePage]);
 
   const PageComponent = PAGES[activePage] || PAGES['overview'];
 
