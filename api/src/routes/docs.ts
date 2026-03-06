@@ -263,11 +263,11 @@ const OPENAPI_SPEC = {
         },
       },
     },
-    '/v1/compress': {
+    '/v1/convert/audio': {
       post: {
         tags: ['File Conversion'],
-        summary: 'Compress or decompress files',
-        description: 'Compress any file with gzip or deflate, or decompress a .gz/.zz file.',
+        summary: 'Convert between audio formats',
+        description: 'Convert audio files between MP3, WAV, FLAC, AAC, OGG, WebM, WMA, and M4A using FFmpeg.',
         requestBody: {
           required: true,
           content: {
@@ -275,17 +275,45 @@ const OPENAPI_SPEC = {
               schema: {
                 type: 'object',
                 properties: {
-                  file: { type: 'string', format: 'binary', description: 'File to compress or decompress' },
-                  action: { type: 'string', enum: ['compress', 'decompress'], default: 'compress' },
-                  format: { type: 'string', enum: ['gzip', 'deflate'], default: 'gzip' },
+                  file: { type: 'string', format: 'binary', description: 'Audio file to convert' },
+                  format: { type: 'string', enum: ['mp3', 'wav', 'flac', 'aac', 'ogg', 'webm', 'wma', 'm4a'], description: 'Target format' },
                 },
-                required: ['file'],
+                required: ['file', 'format'],
               },
             },
           },
         },
         responses: {
-          '200': { description: 'Compressed or decompressed file' },
+          '200': { description: 'Converted audio file' },
+          '400': { description: 'Bad request' },
+          '500': { description: 'Conversion failed' },
+        },
+      },
+    },
+    '/v1/compress': {
+      post: {
+        tags: ['Compression'],
+        summary: 'Compress files (GZIP, ZIP, or image optimization)',
+        description: 'Three modes: gzip (single file to .gz), zip (multiple files to .zip archive), image (lossy image compression with quality control).',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  mode: { type: 'string', enum: ['gzip', 'zip', 'image'], default: 'gzip', description: 'Compression mode' },
+                  file: { type: 'string', format: 'binary', description: 'File to compress (for gzip and image modes)' },
+                  files: { type: 'array', items: { type: 'string', format: 'binary' }, description: 'Files to archive (for zip mode)' },
+                  action: { type: 'string', enum: ['compress', 'decompress'], default: 'compress', description: 'For gzip mode only' },
+                  quality: { type: 'string', description: 'Image quality 1-100 (for image mode, default 70)' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Compressed file with X-Compression-Ratio header' },
           '400': { description: 'Bad request' },
         },
       },

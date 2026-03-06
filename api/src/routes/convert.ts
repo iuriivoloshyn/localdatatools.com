@@ -3,7 +3,15 @@ import * as XLSX from 'xlsx';
 import sharp from 'sharp';
 import { PDFParse } from 'pdf-parse';
 import { Document, Packer, Paragraph, TextRun, PageBreak } from 'docx';
+import { execFile } from 'node:child_process';
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { promisify } from 'node:util';
 import { parseCSV, rowsToCSV } from '../utils/csv.js';
+
+const execFileAsync = promisify(execFile);
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
@@ -207,4 +215,74 @@ convertRoutes.post('/document', async (c) => {
   }
 
   return c.json({ error: 'Supported input formats: .pdf. Upload a PDF file.' }, 400);
+});
+
+// POST /v1/convert/audio - Convert between audio formats using FFmpeg
+const AUDIO_FORMATS = ['mp3', 'wav', 'flac', 'aac', 'ogg', 'webm', 'wma', 'm4a'] as const;
+const AUDIO_MIMES: Record<string, string> = {
+  mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac',
+  aac: 'audio/aac', ogg: 'audio/ogg', webm: 'audio/webm',
+  wma: 'audio/x-ms-wma', m4a: 'audio/mp4',
+};
+
+const FFMPEG_ARGS: Record<string, string[]> = {
+  mp3: ['-c:a', 'libmp3lame', '-q:a', '2'],
+  wav: ['-c:a', 'pcm_s16le'],
+  flac: ['-c:a', 'flac'],
+  aac: ['-c:a', 'aac', '-b:a', '192k'],
+  m4a: ['-c:a', 'aac', '-b:a', '192k'],
+  ogg: ['-c:a', 'libvorbis', '-q:a', '4'],
+  webm: ['-c:a', 'libopus', '-b:a', '96k'],
+  wma: ['-c:a', 'wmav2', '-b:a', '192k'],
+};
+
+convertRoutes.post('/audio', async (c) => {
+  const body = await c.req.parseBody();
+  const file = body['file'] instanceof File ? body['file'] : null;
+  const format = typeof body['format'] === 'string' ? body['format'].toLowerCase() : '';
+
+  if (!file) {
+    return c.json({ error: 'Upload an audio file as "file" form field.' }, 400);
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    return c.json({ error: 'File exceeds 50MB limit.' }, 400);
+  }
+  if (!format || !AUDIO_FORMATS.includes(format as any)) {
+    return c.json({ error: `Specify "format" as one of: ${AUDIO_FORMATS.join(', ')}` }, 400);
+  }
+
+  const id = randomBytes(8).toString('hex');
+  const inputExt = file.name.split('.').pop() || 'bin';
+  const inputPath = join(tmpdir(), `ldt-in-${id}.${inputExt}`);
+  const outputPath = join(tmpdir(), `ldt-out-${id}.${format}`);
+
+  try {
+    // Write input to temp file
+    const buffer = Buffer.from(await file.arrayBuffer());
+    writeFileSync(inputPath, buffer);
+
+    // Build FFmpeg args
+    const codecArgs = FFMPEG_ARGS[format] || ['-c:a', 'copy'];
+    const args = ['-y', '-i', inputPath, ...codecArgs, outputPath];
+
+    await execFileAsync('ffmpeg', args, { timeout: 120_000 });
+
+    const output = readFileSync(outputPath);
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+
+    return new Response(new Uint8Array(output), {
+      headers: {
+        'Content-Type': AUDIO_MIMES[format] || 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${baseName}.${format}"`,
+        'X-Original-Size': String(buffer.length),
+        'X-Output-Size': String(output.length),
+      },
+    });
+  } catch (err: any) {
+    return c.json({ error: `Audio conversion failed: ${err.message || 'Unknown error'}` }, 500);
+  } finally {
+    // Clean up temp files
+    if (existsSync(inputPath)) unlinkSync(inputPath);
+    if (existsSync(outputPath)) unlinkSync(outputPath);
+  }
 });
