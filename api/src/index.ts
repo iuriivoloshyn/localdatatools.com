@@ -4,6 +4,7 @@ import { logger } from 'hono/logger';
 import { apiKeyAuth } from './middleware/auth.js';
 import { rateLimiter } from './middleware/rateLimit.js';
 import { csvRoutes } from './routes/csv.js';
+import { jobRoutes } from './routes/jobs.js';
 import { docsRoutes } from './routes/docs.js';
 import { serve } from '@hono/node-server';
 
@@ -19,9 +20,12 @@ app.get('/', (c) => c.json({
   version: '1.0.0',
   docs: '/docs',
   endpoints: [
-    'POST /v1/csv/merge   - Append (stack) CSV files vertically',
-    'POST /v1/csv/join    - Join two CSV files on a key column',
+    'POST /v1/csv/merge   - Append (stack) CSV files vertically (< 50MB)',
+    'POST /v1/csv/join    - Join two CSV files on a key column (< 50MB)',
     'POST /v1/csv/analyze - Analyze CSV compatibility',
+    'POST /v1/jobs/merge  - Large file merge via encrypted R2 storage (up to 1GB)',
+    'POST /v1/jobs/join   - Large file join via encrypted R2 storage (up to 1GB)',
+    'GET  /v1/jobs/:id/download?key=... - Download encrypted result',
   ],
 }));
 
@@ -29,6 +33,7 @@ app.get('/', (c) => c.json({
 app.use('/v1/*', apiKeyAuth);
 app.use('/v1/*', rateLimiter);
 app.route('/v1/csv', csvRoutes);
+app.route('/v1/jobs', jobRoutes);
 
 // Docs (no auth)
 app.route('/docs', docsRoutes);

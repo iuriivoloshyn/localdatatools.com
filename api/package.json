@@ -8,6 +8,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1003.0",
     "@hono/node-server": "^1.19.11",
     "csv-parse": "^5.6.0",
     "csv-stringify": "^6.5.0",
