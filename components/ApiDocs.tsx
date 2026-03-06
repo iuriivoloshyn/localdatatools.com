@@ -266,17 +266,6 @@ const ApiDocs: React.FC = () => {
               </div>
             ))}
           </div>
-        </section>
-
-        <SectionDivider />
-
-        {/* ───────── AUTHENTICATION ───────── */}
-        <section id="authentication" className="scroll-mt-24 space-y-5">
-          <h2 className="text-2xl font-black text-white">Authentication</h2>
-          <p className="text-gray-400">Generate a free API key and pass it via the <code className="text-cyan-400 bg-gray-900 px-2 py-0.5 rounded text-sm">X-API-Key</code> header.</p>
-
-          <KeyGenerator onKeyGenerated={setGeneratedKey} />
-          {generatedKey && <p className="text-xs text-cyan-400/60">Key applied to all examples below.</p>}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4">
@@ -284,8 +273,8 @@ const ApiDocs: React.FC = () => {
               <code className="text-cyan-400 text-xs">{API_BASE}</code>
             </div>
             <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4">
-              <p className="text-white font-bold text-xs mb-1">Rate Limit</p>
-              <p className="text-gray-400 text-xs">30 requests per minute per key</p>
+              <p className="text-white font-bold text-xs mb-1">Content Type</p>
+              <p className="text-gray-400 text-xs">All requests use <code className="text-cyan-400">multipart/form-data</code></p>
             </div>
             <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4">
               <p className="text-white font-bold text-xs mb-1">Max File Size</p>
@@ -295,11 +284,26 @@ const ApiDocs: React.FC = () => {
 
           <div className="bg-gray-950 border border-white/[0.06] rounded-xl p-4 space-y-2">
             <p className="text-white font-bold text-xs">Error Format</p>
-            <p className="text-gray-400 text-xs">All errors return JSON with an <code className="text-cyan-400">error</code> field.</p>
+            <p className="text-gray-400 text-xs">All errors return JSON with an <code className="text-cyan-400">error</code> field and appropriate HTTP status code.</p>
             <CodeBlock>{`{"error": "Invalid API key."}     // 401
 {"error": "Rate limit exceeded."} // 429
 {"error": "File exceeds 50MB."}   // 400`}</CodeBlock>
           </div>
+        </section>
+
+        <SectionDivider />
+
+        {/* ───────── AUTHENTICATION ───────── */}
+        <section id="authentication" className="scroll-mt-24 space-y-5">
+          <h2 className="text-2xl font-black text-white">Authentication</h2>
+          <p className="text-gray-400">Generate a free API key and include it as the <code className="text-cyan-400 bg-gray-900 px-2 py-0.5 rounded text-sm">X-API-Key</code> header in every request. Rate limit: 30 requests per minute.</p>
+
+          <KeyGenerator onKeyGenerated={setGeneratedKey} />
+          {generatedKey && <p className="text-xs text-cyan-400/60">Key applied to all examples below.</p>}
+
+          <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "file=@data.csv" \\
+  ${API_BASE}/v1/csv/metadata`)}</CodeBlock>
         </section>
 
         <SectionDivider />
