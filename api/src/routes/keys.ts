@@ -19,14 +19,8 @@ keyRoutes.post('/', async (c) => {
 
   const key = await createKey(email);
 
-  if (!key) {
-    return c.json({
-      error: 'A key already exists for this email. Keys are hashed and cannot be recovered. Contact support if you lost your key.',
-    }, 409);
-  }
-
   return c.json({
     apiKey: key,
-    message: 'Save this key — it is hashed on our end and cannot be recovered.',
+    message: 'Save this key — it is hashed on our end and cannot be recovered. Generating a new key invalidates the previous one.',
   });
 });

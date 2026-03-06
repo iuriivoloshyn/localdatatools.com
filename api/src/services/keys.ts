@@ -85,17 +85,15 @@ export async function getValidKeyHashes(): Promise<Set<string>> {
 export async function createKey(email: string): Promise<string> {
   const entries = await loadKeys();
 
-  // Check if email already has a key — can't return it since we only store hashes
-  const existing = entries.find(e => e.email.toLowerCase() === email.toLowerCase());
-  if (existing) {
-    return ''; // Signal that a key already exists for this email
-  }
+  // Remove old key for this email if it exists (regenerate)
+  const filtered = entries.filter(e => e.email.toLowerCase() !== email.toLowerCase());
 
   const key = `ldt_${randomBytes(24).toString('hex')}`;
-  entries.push({ keyHash: hashKey(key), email: email.toLowerCase(), createdAt: new Date().toISOString() });
-  await saveKeys(entries);
+  filtered.push({ keyHash: hashKey(key), email: email.toLowerCase(), createdAt: new Date().toISOString() });
+  await saveKeys(filtered);
 
   // Update cache immediately
+  cachedKeyHashes = new Set(filtered.map(e => e.keyHash));
   cachedKeyHashes.add(hashKey(key));
 
   return key;
