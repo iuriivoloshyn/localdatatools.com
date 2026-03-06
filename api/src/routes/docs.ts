@@ -11,7 +11,7 @@ const OPENAPI_SPEC = {
     contact: { url: 'https://localdatatools.com' },
   },
   servers: [
-    { url: 'https://localdatatools-api-674880939500.us-south1.run.app', description: 'Production' },
+    { url: 'https://api.localdatatools.com', description: 'Production' },
   ],
   security: [{ apiKey: [] }],
   components: {

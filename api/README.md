@@ -2,8 +2,8 @@
 
 Privacy-first CSV processing API. Merge, join, and analyze CSV files via simple HTTP calls. Large files (up to 1GB) are encrypted at rest with AES-256-GCM — even the server operator cannot read stored files.
 
-**Live API:** https://localdatatools-api-674880939500.us-south1.run.app
-**Interactive Docs:** https://localdatatools-api-674880939500.us-south1.run.app/docs
+**Live API:** https://api.localdatatools.com
+**Interactive Docs:** https://api.localdatatools.com/docs
 **Web App:** https://localdatatools.com
 
 ## Quick Start
@@ -11,7 +11,7 @@ Privacy-first CSV processing API. Merge, join, and analyze CSV files via simple 
 ```bash
 # Set your API key
 API_KEY="your-api-key"
-BASE="https://localdatatools-api-674880939500.us-south1.run.app"
+BASE="https://api.localdatatools.com"
 
 # Merge two CSV files
 curl -H "X-API-Key: $API_KEY" \
@@ -150,7 +150,7 @@ curl -H "X-API-Key: $API_KEY" \
 import requests
 
 API_KEY = "your-key"
-BASE = "https://localdatatools-api-674880939500.us-south1.run.app"
+BASE = "https://api.localdatatools.com"
 
 # Merge
 files = [
@@ -179,7 +179,7 @@ const form = new FormData();
 form.append("files", new Blob([csv1]), "file1.csv");
 form.append("files", new Blob([csv2]), "file2.csv");
 
-const res = await fetch("https://localdatatools-api-674880939500.us-south1.run.app/v1/csv/merge", {
+const res = await fetch("https://api.localdatatools.com/v1/csv/merge", {
   method: "POST",
   headers: { "X-API-Key": "your-key" },
   body: form,
