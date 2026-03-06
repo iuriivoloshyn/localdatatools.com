@@ -208,6 +208,61 @@ const OPENAPI_SPEC = {
         },
       },
     },
+    '/v1/convert/image': {
+      post: {
+        tags: ['File Conversion'],
+        summary: 'Convert between image formats',
+        description: 'Convert images between PNG, JPEG, WebP, AVIF, TIFF, and GIF. Optionally resize.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'Image file to convert' },
+                  format: { type: 'string', enum: ['png', 'jpeg', 'webp', 'avif', 'tiff', 'gif'], description: 'Target format' },
+                  quality: { type: 'string', description: 'Output quality 1-100 (default 80, applies to jpeg/webp/avif)' },
+                  width: { type: 'string', description: 'Resize width in pixels (maintains aspect ratio)' },
+                  height: { type: 'string', description: 'Resize height in pixels (maintains aspect ratio)' },
+                },
+                required: ['file', 'format'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Converted image file' },
+          '400': { description: 'Bad request' },
+        },
+      },
+    },
+    '/v1/convert/document': {
+      post: {
+        tags: ['File Conversion'],
+        summary: 'Convert PDF to text, DOCX, or JSON',
+        description: 'Extract text from PDF files. Output as plain text, DOCX document, or structured JSON with metadata.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'PDF file' },
+                  format: { type: 'string', enum: ['txt', 'docx', 'json'], default: 'txt', description: 'Output format' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Converted document' },
+          '400': { description: 'Bad request' },
+        },
+      },
+    },
     '/v1/compress': {
       post: {
         tags: ['File Conversion'],

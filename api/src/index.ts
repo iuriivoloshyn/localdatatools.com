@@ -30,6 +30,8 @@ app.get('/', (c) => c.json({
     'POST /v1/csv/metadata   - Extract column types, stats, null rates',
     'POST /v1/csv/anonymize  - Mask PII in CSV columns',
     'POST /v1/convert/spreadsheet - CSV <-> Excel conversion',
+    'POST /v1/convert/image  - Convert between PNG, JPEG, WebP, AVIF, TIFF, GIF',
+    'POST /v1/convert/document - PDF -> TXT, DOCX, or JSON',
     'POST /v1/compress       - Compress/decompress files (gzip, deflate)',
     'POST /v1/jobs/merge     - Large file merge via encrypted R2 storage (up to 1GB)',
     'POST /v1/jobs/join      - Large file join via encrypted R2 storage (up to 1GB)',
