@@ -48,6 +48,7 @@ async function loadKeys(): Promise<KeyEntry[]> {
       if ((entry as any).key && !(entry as any).keyHash) {
         entry.keyHash = hashKey((entry as any).key);
         delete (entry as any).key;
+        (entry as any).migratedAt = new Date().toISOString();
         migrated = true;
       }
     }
