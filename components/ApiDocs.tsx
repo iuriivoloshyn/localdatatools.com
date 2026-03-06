@@ -14,13 +14,9 @@ const NAV_SECTIONS = [
   {
     group: 'CSV',
     items: [
-      { id: 'csv-merge', label: 'Merge' },
-      { id: 'csv-join', label: 'Join' },
+      { id: 'csv-merge-join', label: 'Merge & Join' },
       { id: 'csv-compare', label: 'Compare' },
-      { id: 'csv-metadata', label: 'Metadata' },
       { id: 'csv-anonymize', label: 'Anonymize' },
-      { id: 'csv-analyze', label: 'Analyze' },
-      { id: 'csv-large-files', label: 'Large Files' },
     ],
   },
   {
@@ -233,37 +229,125 @@ const ApiKeyPage = ({ generatedKey, setGeneratedKey }: { generatedKey: string; s
   </div>
 );
 
-const CsvMergePage = ({ k }: { k: (s: string) => string }) => (
-  <div className="space-y-5">
-    <h1 className="text-3xl font-black text-white">CSV Merge</h1>
-    <p className="text-gray-400">Stack multiple CSV files vertically. The first file's headers are used for the output.</p>
-    <Endpoint method="POST" path="/v1/csv/merge" responseType="csv" />
-    <ParamTable params={[
-      { name: 'files', type: 'file[]', required: true, desc: 'Two or more CSV files to merge' },
-    ]} />
-    <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+const CsvMergeJoinPage = ({ k }: { k: (s: string) => string }) => (
+  <div className="space-y-12">
+    <div className="space-y-4">
+      <h1 className="text-3xl font-black text-white">CSV Merge & Join</h1>
+      <p className="text-gray-400">Combine CSV files — stack them vertically (merge) or link them on a key column (join). Analyze headers and inspect metadata before combining.</p>
+    </div>
+
+    {/* Analyze */}
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-white border-b border-white/[0.06] pb-3">Analyze</h2>
+      <p className="text-gray-400 text-sm">Check if multiple CSV files have compatible headers before merging.</p>
+      <Endpoint method="POST" path="/v1/csv/analyze" responseType="json" />
+      <ParamTable params={[
+        { name: 'files', type: 'file[]', required: true, desc: 'Two or more CSV files to check compatibility' },
+      ]} />
+      <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "files=@file1.csv" -F "files=@file2.csv" \\
+  ${API_BASE}/v1/csv/analyze`)}</CodeBlock>
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
+      <CodeBlock>{`{
+  "primary": "file1.csv",
+  "primaryHeaders": ["id", "name", "age"],
+  "results": [{"file": "file2.csv", "compatible": true, "reason": "Compatible"}],
+  "canMerge": true
+}`}</CodeBlock>
+    </div>
+
+    {/* Metadata */}
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-white border-b border-white/[0.06] pb-3">Metadata</h2>
+      <p className="text-gray-400 text-sm">Extract column types, row counts, null rates, and summary statistics from a CSV file.</p>
+      <Endpoint method="POST" path="/v1/csv/metadata" responseType="json" />
+      <ParamTable params={[
+        { name: 'file', type: 'file', required: true, desc: 'CSV file to inspect' },
+      ]} />
+      <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "file=@data.csv" \\
+  ${API_BASE}/v1/csv/metadata`)}</CodeBlock>
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
+      <CodeBlock>{`{
+  "fileName": "data.csv",
+  "rowCount": 1000,
+  "columnCount": 4,
+  "columns": [
+    {"header": "age", "type": "integer", "min": 18, "max": 65, "mean": 34.2},
+    {"header": "email", "type": "string", "nullRate": 0.02, "unique": 980}
+  ]
+}`}</CodeBlock>
+    </div>
+
+    {/* Merge */}
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-white border-b border-white/[0.06] pb-3">Merge</h2>
+      <p className="text-gray-400 text-sm">Stack multiple CSV files vertically. The first file's headers are used for the output.</p>
+      <Endpoint method="POST" path="/v1/csv/merge" responseType="csv" />
+      <ParamTable params={[
+        { name: 'files', type: 'file[]', required: true, desc: 'Two or more CSV files to merge' },
+      ]} />
+      <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
   -F "files=@file1.csv" -F "files=@file2.csv" \\
   ${API_BASE}/v1/csv/merge > merged.csv`)}</CodeBlock>
-  </div>
-);
+    </div>
 
-const CsvJoinPage = ({ k }: { k: (s: string) => string }) => (
-  <div className="space-y-5">
-    <h1 className="text-3xl font-black text-white">CSV Join</h1>
-    <p className="text-gray-400">Left or inner join two CSV files on a key column.</p>
-    <Endpoint method="POST" path="/v1/csv/join" responseType="csv" />
-    <ParamTable params={[
-      { name: 'left', type: 'file', required: true, desc: 'Left CSV file' },
-      { name: 'right', type: 'file', required: true, desc: 'Right CSV file' },
-      { name: 'left_key', type: 'string', required: true, desc: 'Join column in left file' },
-      { name: 'right_key', type: 'string', required: true, desc: 'Join column in right file' },
-      { name: 'join_type', type: 'string', desc: 'left (default) or inner' },
-      { name: 'case_sensitive', type: 'string', desc: 'true (default) or false' },
-    ]} />
-    <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+    {/* Join */}
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-white border-b border-white/[0.06] pb-3">Join</h2>
+      <p className="text-gray-400 text-sm">Left or inner join two CSV files on a key column.</p>
+      <Endpoint method="POST" path="/v1/csv/join" responseType="csv" />
+      <ParamTable params={[
+        { name: 'left', type: 'file', required: true, desc: 'Left CSV file' },
+        { name: 'right', type: 'file', required: true, desc: 'Right CSV file' },
+        { name: 'left_key', type: 'string', required: true, desc: 'Join column in left file' },
+        { name: 'right_key', type: 'string', required: true, desc: 'Join column in right file' },
+        { name: 'join_type', type: 'string', desc: 'left (default) or inner' },
+        { name: 'case_sensitive', type: 'string', desc: 'true (default) or false' },
+      ]} />
+      <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
   -F "left=@employees.csv" -F "right=@salaries.csv" \\
   -F "left_key=id" -F "right_key=emp_id" \\
   ${API_BASE}/v1/csv/join > joined.csv`)}</CodeBlock>
+    </div>
+
+    {/* Large Files */}
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-white border-b border-white/[0.06] pb-3">Large Files (50MB–1GB)</h2>
+      <p className="text-gray-400 text-sm">For files over 50MB, use the encrypted job endpoints. Same parameters as merge/join above — results are encrypted with AES-256-GCM and the key is only returned to you.</p>
+
+      <div className="space-y-4">
+        <div>
+          <Endpoint method="POST" path="/v1/jobs/merge" responseType="json" />
+          <p className="text-gray-400 text-sm">Same as <code className="text-cyan-400">/v1/csv/merge</code> — returns a job with download URL and decryption key.</p>
+        </div>
+        <div>
+          <Endpoint method="POST" path="/v1/jobs/join" responseType="json" />
+          <p className="text-gray-400 text-sm">Same as <code className="text-cyan-400">/v1/csv/join</code> — same parameters, encrypted result.</p>
+        </div>
+        <div>
+          <Endpoint method="GET" path="/v1/jobs/:id/download?key=FILE_KEY" responseType="file" />
+          <p className="text-gray-400 text-sm">Download and decrypt. One-time — file is deleted after retrieval or expires in 24h.</p>
+        </div>
+      </div>
+
+      <CodeBlock>{k(`# 1. Submit large merge job
+curl -H "X-API-Key: your-api-key" \\
+  -F "files=@huge1.csv" -F "files=@huge2.csv" \\
+  ${API_BASE}/v1/jobs/merge
+
+# Response: {"jobId": "...", "fileKey": "...", "downloadUrl": "...", "expiresIn": "24 hours"}
+
+# 2. Download the result
+curl -H "X-API-Key: your-api-key" \\
+  "${API_BASE}/v1/jobs/JOB_ID/download?key=FILE_KEY" > result.csv`)}</CodeBlock>
+
+      <div className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4 text-xs text-amber-200/70 space-y-1">
+        <p className="font-bold text-amber-400">Important</p>
+        <p>Save the <code className="text-amber-400">fileKey</code> — it is not stored on the server and cannot be recovered.</p>
+        <p>Downloads are one-time. The file is deleted after the first successful download.</p>
+      </div>
+    </div>
   </div>
 );
 
@@ -290,30 +374,6 @@ const CsvComparePage = ({ k }: { k: (s: string) => string }) => (
   </div>
 );
 
-const CsvMetadataPage = ({ k }: { k: (s: string) => string }) => (
-  <div className="space-y-5">
-    <h1 className="text-3xl font-black text-white">CSV Metadata</h1>
-    <p className="text-gray-400">Extract column types, row counts, null rates, and summary statistics from a CSV file.</p>
-    <Endpoint method="POST" path="/v1/csv/metadata" responseType="json" />
-    <ParamTable params={[
-      { name: 'file', type: 'file', required: true, desc: 'CSV file to analyze' },
-    ]} />
-    <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
-  -F "file=@data.csv" \\
-  ${API_BASE}/v1/csv/metadata`)}</CodeBlock>
-    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
-    <CodeBlock>{`{
-  "fileName": "data.csv",
-  "rowCount": 1000,
-  "columnCount": 4,
-  "columns": [
-    {"header": "age", "type": "integer", "min": 18, "max": 65, "mean": 34.2},
-    {"header": "email", "type": "string", "nullRate": 0.02, "unique": 980}
-  ]
-}`}</CodeBlock>
-  </div>
-);
-
 const CsvAnonymizePage = ({ k }: { k: (s: string) => string }) => (
   <div className="space-y-5">
     <h1 className="text-3xl font-black text-white">CSV Anonymize</h1>
@@ -336,72 +396,6 @@ Alice Smith    → A***e S***h
 # mode=redact
 alice@test.com → [REDACTED]
 555-123-4567   → [REDACTED]`}</CodeBlock>
-  </div>
-);
-
-const CsvAnalyzePage = ({ k }: { k: (s: string) => string }) => (
-  <div className="space-y-5">
-    <h1 className="text-3xl font-black text-white">CSV Analyze</h1>
-    <p className="text-gray-400">Check if multiple CSV files have compatible headers before merging.</p>
-    <Endpoint method="POST" path="/v1/csv/analyze" responseType="json" />
-    <ParamTable params={[
-      { name: 'files', type: 'file[]', required: true, desc: 'Two or more CSV files to check compatibility' },
-    ]} />
-    <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
-  -F "files=@file1.csv" -F "files=@file2.csv" \\
-  ${API_BASE}/v1/csv/analyze`)}</CodeBlock>
-    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
-    <CodeBlock>{`{
-  "primary": "file1.csv",
-  "primaryHeaders": ["id", "name", "age"],
-  "results": [{"file": "file2.csv", "compatible": true, "reason": "Compatible"}],
-  "canMerge": true
-}`}</CodeBlock>
-  </div>
-);
-
-const CsvLargeFilesPage = ({ k }: { k: (s: string) => string }) => (
-  <div className="space-y-5">
-    <h1 className="text-3xl font-black text-white">CSV Large Files</h1>
-    <p className="text-gray-400">For CSV merge or join with files over 50MB (up to 1GB). Same parameters as the regular endpoints — results are encrypted with AES-256-GCM and the decryption key is only returned to you, never stored on the server.</p>
-
-    <div className="space-y-4">
-      <div>
-        <Endpoint method="POST" path="/v1/jobs/merge" responseType="json" />
-        <p className="text-gray-400 text-sm mb-3">Same as <code className="text-cyan-400">/v1/csv/merge</code> but for large files. Returns a job with download URL and decryption key.</p>
-      </div>
-      <div>
-        <Endpoint method="POST" path="/v1/jobs/join" responseType="json" />
-        <p className="text-gray-400 text-sm mb-3">Same as <code className="text-cyan-400">/v1/csv/join</code> but for large files. Same parameters.</p>
-      </div>
-      <div>
-        <Endpoint method="GET" path="/v1/jobs/:id/download?key=FILE_KEY" responseType="file" />
-        <p className="text-gray-400 text-sm mb-3">Download and decrypt the result. One-time download — file is deleted after retrieval or expires in 24 hours.</p>
-      </div>
-    </div>
-
-    <CodeBlock>{k(`# 1. Submit large merge job
-curl -H "X-API-Key: your-api-key" \\
-  -F "files=@huge1.csv" -F "files=@huge2.csv" \\
-  ${API_BASE}/v1/jobs/merge
-
-# Response:
-# {
-#   "jobId": "49e1ea...",
-#   "fileKey": "47ce12...",
-#   "downloadUrl": "/v1/jobs/49e1ea.../download?key=47ce12...",
-#   "expiresIn": "24 hours"
-# }
-
-# 2. Download the result
-curl -H "X-API-Key: your-api-key" \\
-  "${API_BASE}/v1/jobs/JOB_ID/download?key=FILE_KEY" > result.csv`)}</CodeBlock>
-
-    <div className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4 text-xs text-amber-200/70 space-y-1">
-      <p className="font-bold text-amber-400">Important</p>
-      <p>Save the <code className="text-amber-400">fileKey</code> — it is not stored on the server and cannot be recovered.</p>
-      <p>Downloads are one-time. The file is deleted after the first successful download.</p>
-    </div>
   </div>
 );
 
@@ -595,13 +589,9 @@ const mp3 = await fetch(\`\${BASE}/v1/convert/audio\`, {
 const PAGES: Record<string, React.FC<{ k: (s: string) => string; generatedKey: string; setGeneratedKey: (k: string) => void }>> = {
   'overview': () => <OverviewPage />,
   'api-key': ({ generatedKey, setGeneratedKey }) => <ApiKeyPage generatedKey={generatedKey} setGeneratedKey={setGeneratedKey} />,
-  'csv-merge': ({ k }) => <CsvMergePage k={k} />,
-  'csv-join': ({ k }) => <CsvJoinPage k={k} />,
+  'csv-merge-join': ({ k }) => <CsvMergeJoinPage k={k} />,
   'csv-compare': ({ k }) => <CsvComparePage k={k} />,
-  'csv-metadata': ({ k }) => <CsvMetadataPage k={k} />,
   'csv-anonymize': ({ k }) => <CsvAnonymizePage k={k} />,
-  'csv-analyze': ({ k }) => <CsvAnalyzePage k={k} />,
-  'csv-large-files': ({ k }) => <CsvLargeFilesPage k={k} />,
   'convert-spreadsheet': ({ k }) => <ConvertSpreadsheetPage k={k} />,
   'convert-image': ({ k }) => <ConvertImagePage k={k} />,
   'convert-document': ({ k }) => <ConvertDocumentPage k={k} />,
