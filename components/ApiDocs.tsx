@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, ExternalLink, Lock, Zap, FileText, Shield, Code, Key, Loader2, FileSpreadsheet, Image, Music, Archive } from 'lucide-react';
+import { Copy, Check, ExternalLink, Lock, Zap, FileText, Shield, Code, Key, Loader2, FileSpreadsheet, Image, Music, Archive, MessageCircle } from 'lucide-react';
 
 const API_BASE = 'https://api.localdatatools.com';
 
@@ -524,7 +524,15 @@ const mp3 = await fetch(\`\${BASE}/v1/convert/audio\`, {
         </section>
 
         {/* Footer */}
-        <div className="text-center pt-8 border-t border-white/[0.06]">
+        <div className="flex flex-col items-center gap-4 pt-8 border-t border-white/[0.06]">
+          <a
+            href="https://t.me/localdatatoolsfr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900/50 border border-white/[0.06] text-gray-400 hover:text-white hover:border-cyan-500/30 transition-all text-sm"
+          >
+            <MessageCircle size={14} /> Request a feature or report a bug
+          </a>
           <p className="text-gray-500 text-sm">
             Built with <a href="https://hono.dev" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Hono</a> · Hosted on Google Cloud Run · Encrypted storage via Cloudflare R2
           </p>
