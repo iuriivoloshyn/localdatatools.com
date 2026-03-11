@@ -26,7 +26,7 @@ interface QueueItem {
 }
 
 const ConverterTool: React.FC = () => {
-  const { t, consumePendingFile } = useLanguage();
+  const { t, consumePendingFile, pendingFile } = useLanguage();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
@@ -42,7 +42,7 @@ const ConverterTool: React.FC = () => {
     if (file) {
       addToQueue([file]);
     }
-  }, []);
+  }, [pendingFile]);
 
   const isImage = (name: string) => {
       const ext = name.split('.').pop()?.toLowerCase() || '';
