@@ -513,19 +513,20 @@ export const convertAudio = async (file: File, targetFormat: string): Promise<Co
 
 export const convertVideo = async (file: File, targetFormat: string): Promise<ConversionResult> => {
     console.log(`[convertVideo] Starting conversion of ${file.name} to ${targetFormat}`);
+
+    // Video conversion via FFmpeg.wasm is unreliable for large files.
+    // Use a timeout to fail gracefully instead of hanging forever.
+    const TIMEOUT_MS = targetFormat === 'gif' || targetFormat === 'mp3' ? 60_000 : 30_000;
+
     const ffmpeg = await getFFmpeg();
     const inputExt = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     const inputName = `input_${Date.now()}.${inputExt}`;
     const outputName = `output_${Date.now()}.${targetFormat}`;
 
-    console.log(`[convertVideo] Writing file ${inputName} to virtual FS...`);
     await ffmpeg.writeFile(inputName, await fetchFile(file));
 
     let args: string[] = ['-y', '-i', inputName];
 
-    // Browser FFmpeg.wasm: use stream copy (instant remux) for container changes.
-    // Re-encoding video in single-threaded WASM is too slow for practical use.
-    // Only GIF and audio extraction require re-encoding.
     switch (targetFormat) {
         case 'gif':
             args.push('-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0');
@@ -534,14 +535,28 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
             args.push('-vn', '-c:a', 'libmp3lame', '-q:a', '2');
             break;
         default:
-            // Stream copy — changes container without re-encoding (fast)
             args.push('-c', 'copy');
     }
 
     args.push(outputName);
 
     console.log(`[convertVideo] Executing ffmpeg with args:`, args);
-    await ffmpeg.exec(args);
+
+    // Race between conversion and timeout
+    const execPromise = ffmpeg.exec(args);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(
+            `Video conversion timed out. Browser-based video conversion has limitations — use the API (POST /v1/convert/video) for reliable results.`
+        )), TIMEOUT_MS)
+    );
+
+    try {
+        await Promise.race([execPromise, timeoutPromise]);
+    } catch (err) {
+        // Reset FFmpeg instance so it doesn't stay stuck for future conversions
+        ffmpegInstance = null;
+        throw err;
+    }
 
     const data = await ffmpeg.readFile(outputName);
     const mimeMap: Record<string, string> = {
@@ -556,7 +571,6 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
     await ffmpeg.deleteFile(inputName);
     await ffmpeg.deleteFile(outputName);
 
-    console.log(`[convertVideo] Conversion finished successfully.`);
     return {
         name: `${baseName}.${targetFormat}`,
         blob: blob,

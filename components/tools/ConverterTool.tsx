@@ -276,7 +276,7 @@ const ConverterTool: React.FC = () => {
           "Drag & Drop files (CSV, XLSX, PDF, DOCX, Images, Audio, Video)",
           "For Images, PDFs, Audio, & Video, select your desired output format",
           "Use the master switch in the queue to update all files at once",
-          "Download results individually or as a ZIP archive"
+          "Video: browser conversion works for small files. For large videos, use the API"
         ]}
         icon={RefreshCw}
         colorClass="text-green-400"
