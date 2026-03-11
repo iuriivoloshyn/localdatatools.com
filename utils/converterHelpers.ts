@@ -575,7 +575,12 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
         target: new BufferTarget(),
     });
 
-    const conversion = await Conversion.init({ input, output });
+    const conversionOpts: any = { input, output };
+    // When extracting audio, explicitly discard the video track
+    if (isAudioTarget) {
+        conversionOpts.video = { discard: true };
+    }
+    const conversion = await Conversion.init(conversionOpts);
     activeConversion = conversion;
 
     conversion.onProgress = (progress: number) => {
