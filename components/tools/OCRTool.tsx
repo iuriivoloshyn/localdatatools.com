@@ -33,7 +33,7 @@ const pdfToImages = async (file: File): Promise<File[]> => {
 };
 
 const OCRTool: React.FC = () => {
-  const { t, lang, consumePendingFile } = useLanguage();
+  const { t, lang, consumePendingFile, pendingFile } = useLanguage();
 
   // Basic Mode State
   const [basicImages, setBasicImages] = useState<any[]>([]);
@@ -43,11 +43,11 @@ const OCRTool: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const file = consumePendingFile();
+    const file = consumePendingFile('ocr');
     if (file) {
       handleIncomingFiles([file]);
     }
-  }, []);
+  }, [pendingFile]);
 
   const handleReset = () => {
       setBasicImages([]);

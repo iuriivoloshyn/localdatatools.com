@@ -734,7 +734,7 @@ const ViewerTool: React.FC = () => {
   };
 
   return (
-    <div className={`space-y-6 ${files.length > 0 ? 'h-full flex flex-col' : ''}`}>
+    <div className={`space-y-6 pb-20 ${files.length > 0 ? 'min-h-full flex flex-col' : ''}`}>
       {!isFullScreen && (
         <ToolHeader 
           title="File Viewer"

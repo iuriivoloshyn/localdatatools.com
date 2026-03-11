@@ -258,9 +258,9 @@ const AiChatTool: React.FC = () => {
   // --- MARKDOWN RENDERING END ---
 
   return (
-    <div className={!isModelLoaded 
-        ? "space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500" 
-        : "flex flex-col h-[calc(100vh-140px)] animate-in fade-in slide-in-from-bottom-2 duration-500"
+    <div className={!isModelLoaded
+        ? "space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-2 duration-500"
+        : "flex flex-col h-[calc(100vh-140px)] pb-20 animate-in fade-in slide-in-from-bottom-2 duration-500"
     }>
       <div className={!isModelLoaded ? "" : "shrink-0 mb-4"}>
         <ToolHeader 

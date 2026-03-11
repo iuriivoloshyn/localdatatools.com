@@ -211,11 +211,11 @@ const OverviewPage = () => (
       </div>
       <div className="bg-gray-900/50 border border-white/[0.06] rounded-xl p-4">
         <p className="text-white font-bold text-xs mb-1">Max File Size</p>
-        <p className="text-gray-400 text-xs">50MB per request</p>
+        <p className="text-gray-400 text-xs">50MB (CSV), 1GB (conversion)</p>
       </div>
       <div className="bg-gray-900/50 border border-white/[0.06] rounded-xl p-4">
         <p className="text-white font-bold text-xs mb-1">Endpoints</p>
-        <p className="text-gray-400 text-xs">15 across CSV, conversion, compression</p>
+        <p className="text-gray-400 text-xs">16 across CSV, conversion, compression</p>
       </div>
     </div>
 

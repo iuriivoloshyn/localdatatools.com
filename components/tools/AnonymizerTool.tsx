@@ -123,7 +123,7 @@ interface KeyFileStructure {
 }
 
 const AnonymizerTool: React.FC = () => {
-  const { lang, consumePendingFile } = useLanguage();
+  const { lang, consumePendingFile, pendingFile } = useLanguage();
   const txt = TEXT[lang];
   const [mode, setMode] = useState<Mode>('anonymize');
   
@@ -146,7 +146,7 @@ const AnonymizerTool: React.FC = () => {
   // --- PENDING FILE CONSUMPTION ---
 
   useEffect(() => {
-    const pending = consumePendingFile();
+    const pending = consumePendingFile('anonymizer');
     if (pending) {
       (async () => {
         const isCsv = pending.type === 'text/csv' || pending.name.toLowerCase().endsWith('.csv');
@@ -166,7 +166,7 @@ const AnonymizerTool: React.FC = () => {
         setFile(fileData);
       })();
     }
-  }, []);
+  }, [pendingFile]);
 
   // --- ANONYMIZE LOGIC ---
 

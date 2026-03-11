@@ -38,7 +38,7 @@ interface ProcessedItem {
 }
 
 const MetadataTool: React.FC = () => {
-  const { t, consumePendingFile } = useLanguage();
+  const { t, consumePendingFile, pendingFile } = useLanguage();
   const [queue, setQueue] = useState<ImageItem[]>([]);
   const [results, setResults] = useState<ProcessedItem[]>([]);
   const [viewMode, setViewMode] = useState<'input' | 'results'>('input');
@@ -62,11 +62,11 @@ const MetadataTool: React.FC = () => {
   const [zipSize, setZipSize] = useState<string>("");
 
   useEffect(() => {
-    const file = consumePendingFile();
+    const file = consumePendingFile('metadata');
     if (file) {
       handleFiles([file]);
     }
-  }, []);
+  }, [pendingFile]);
 
   const currentList = viewMode === 'input' 
     ? queue 
@@ -293,7 +293,7 @@ const MetadataTool: React.FC = () => {
 
   return (
     <div 
-      className="flex flex-col relative flex-1 min-h-0 h-full pb-4"
+      className="flex flex-col relative flex-1 min-h-0 min-h-full pb-20"
       onDragOver={(e) => { 
         e.preventDefault(); 
         // Only show drop zone if user is dragging FILES, not reordering internal items

@@ -167,13 +167,13 @@ const runWorkerTransformation = (data: any[], code: string, onProgress: (pct: nu
 };
 
 const AiCsvEditorTool: React.FC = () => {
-  const { t, consumePendingFile } = useLanguage();
+  const { t, consumePendingFile, pendingFile } = useLanguage();
   const { engine, isModelLoaded, isLoading: isModelLoading, progress: modelProgress, progressVal: modelProgressVal, error: modelError, initGemma } = useGemma();
 
   const [file, setFile] = useState<FileData | undefined>();
 
   useEffect(() => {
-    const pending = consumePendingFile();
+    const pending = consumePendingFile('ai-csv-editor');
     if (pending) {
       (async () => {
         const isCsv = pending.type === 'text/csv' || pending.name.toLowerCase().endsWith('.csv');
@@ -193,7 +193,7 @@ const AiCsvEditorTool: React.FC = () => {
         setFile(fileData);
       })();
     }
-  }, []);
+  }, [pendingFile]);
   const fullDataRef = useRef<any[]>([]);
   const originalDataRef = useRef<any[]>([]);
   const historyRef = useRef<any[][]>([]); 
@@ -484,8 +484,8 @@ RULES:
   };
 
   return (
-    <div className="space-y-6">
-      <ToolHeader 
+    <div className="space-y-6 pb-20">
+      <ToolHeader
         title="Smart CSV Editor"
         description="Modify datasets using natural language instructions. Google Gemini translates your text into code. A small sample of your data is used for context to ensure accurate transformations."
         instructions={[]}

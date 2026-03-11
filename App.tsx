@@ -29,8 +29,8 @@ const AppContext = createContext<{
   isProMode: boolean;
   setIsProMode: (val: boolean) => void;
   navigateTo: (tool: ToolType, file?: File) => void;
-  pendingFile: File | null;
-  consumePendingFile: () => File | null;
+  pendingFile: number;
+  consumePendingFile: (forTool?: string) => File | null;
 }>({
   lang: 'en',
   setLang: () => {},
@@ -38,7 +38,7 @@ const AppContext = createContext<{
   isProMode: true,
   setIsProMode: () => {},
   navigateTo: () => {},
-  pendingFile: null,
+  pendingFile: 0,
   consumePendingFile: () => null,
 });
 
@@ -750,20 +750,20 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
                   </div>
                 </aside>
                 <main className="flex-1 px-4 py-6 md:p-8 md:overflow-y-auto overflow-x-hidden relative z-10 custom-scrollbar scroll-smooth" ref={mainContentRef}>
-                  <div className="max-w-7xl mx-auto h-full">
+                  <div className="max-w-7xl mx-auto min-h-full">
                       <Suspense fallback={<ToolLoader />}>
-                          {visitedTools.has('merge') && <div className={activeTool === 'merge' ? 'block h-full' : 'hidden h-full'}><MergeTool /></div>}
-                          {visitedTools.has('diff') && <div className={activeTool === 'diff' ? 'block h-full' : 'hidden h-full'}><DiffTool /></div>}
-                          {visitedTools.has('ai-csv-editor') && <div className={activeTool === 'ai-csv-editor' ? 'block h-full' : 'hidden h-full'}><AiCsvEditorTool /></div>}
-                          {visitedTools.has('ocr') && <div className={activeTool === 'ocr' ? 'block h-full' : 'hidden h-full'}><OCRTool /></div>}
-                          {visitedTools.has('chat') && <div className={activeTool === 'chat' ? 'block h-full' : 'hidden h-full'}><AiChatTool /></div>}
-                          {visitedTools.has('converter') && <div className={activeTool === 'converter' ? 'block h-full' : 'hidden h-full'}><ConverterTool /></div>}
-                          {visitedTools.has('viewer') && <div className={activeTool === 'viewer' ? 'block h-full' : 'hidden h-full'}><ViewerTool /></div>}
-                          {visitedTools.has('anonymizer') && <div className={activeTool === 'anonymizer' ? 'block h-full' : 'hidden h-full'}><AnonymizerTool /></div>}
-                          {visitedTools.has('metadata') && <div className={activeTool === 'metadata' ? 'block h-full' : 'hidden h-full'}><MetadataTool /></div>}
-                          {visitedTools.has('compressor') && <div className={activeTool === 'compressor' ? 'block h-full' : 'hidden h-full'}><CompressorTool /></div>}
-                          {visitedTools.has('generate-csv') && <div className={activeTool === 'generate-csv' ? 'block h-full' : 'hidden h-full'}><GenerateCsvTool /></div>}
-                          {visitedTools.has('dashboard') && <div className={activeTool === 'dashboard' ? 'block h-full' : 'hidden h-full'}><InstantDashboardTool /></div>}
+                          {visitedTools.has('merge') && <div className={activeTool === 'merge' ? 'block min-h-full' : 'hidden'}><MergeTool /></div>}
+                          {visitedTools.has('diff') && <div className={activeTool === 'diff' ? 'block min-h-full' : 'hidden'}><DiffTool /></div>}
+                          {visitedTools.has('ai-csv-editor') && <div className={activeTool === 'ai-csv-editor' ? 'block min-h-full' : 'hidden'}><AiCsvEditorTool /></div>}
+                          {visitedTools.has('ocr') && <div className={activeTool === 'ocr' ? 'block min-h-full' : 'hidden'}><OCRTool /></div>}
+                          {visitedTools.has('chat') && <div className={activeTool === 'chat' ? 'block min-h-full' : 'hidden'}><AiChatTool /></div>}
+                          {visitedTools.has('converter') && <div className={activeTool === 'converter' ? 'block min-h-full' : 'hidden'}><ConverterTool /></div>}
+                          {visitedTools.has('viewer') && <div className={activeTool === 'viewer' ? 'block min-h-full' : 'hidden'}><ViewerTool /></div>}
+                          {visitedTools.has('anonymizer') && <div className={activeTool === 'anonymizer' ? 'block min-h-full' : 'hidden'}><AnonymizerTool /></div>}
+                          {visitedTools.has('metadata') && <div className={activeTool === 'metadata' ? 'block min-h-full' : 'hidden'}><MetadataTool /></div>}
+                          {visitedTools.has('compressor') && <div className={activeTool === 'compressor' ? 'block min-h-full' : 'hidden'}><CompressorTool /></div>}
+                          {visitedTools.has('generate-csv') && <div className={activeTool === 'generate-csv' ? 'block min-h-full' : 'hidden'}><GenerateCsvTool /></div>}
+                          {visitedTools.has('dashboard') && <div className={activeTool === 'dashboard' ? 'block min-h-full' : 'hidden'}><InstantDashboardTool /></div>}
                       </Suspense>
                   </div>
                 </main>
@@ -776,21 +776,31 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
 export const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('en');
   const [isProMode, setIsProMode] = useState(true);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFileToken, setPendingFileToken] = useState(0);
+  const pendingFileRef = useRef<File | null>(null);
+  const pendingToolRef = useRef<string | null>(null);
   const navigateRef = useRef<(tool: ToolType) => void>(() => {});
 
   const t = (key: string) => DICTIONARY[lang][key] || key;
 
   const navigateTo = (tool: ToolType, file?: File) => {
-    if (file) setPendingFile(file);
+    if (file) {
+      pendingFileRef.current = file;
+      pendingToolRef.current = tool;
+      setPendingFileToken(t => t + 1);
+    }
     navigateRef.current(tool);
   };
 
-  const consumePendingFile = () => {
-    const f = pendingFile;
-    setPendingFile(null);
+  const consumePendingFile = (forTool?: string) => {
+    if (forTool && pendingToolRef.current !== forTool) return null;
+    const f = pendingFileRef.current;
+    pendingFileRef.current = null;
+    pendingToolRef.current = null;
     return f;
   };
+
+  const pendingFile = pendingFileToken;
 
   return (
     <GemmaProvider>

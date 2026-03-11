@@ -392,12 +392,12 @@ const createWorkerBlob = () => {
 // --- COMPONENT ---
 
 const DiffTool: React.FC = () => {
-  const { t, consumePendingFile } = useLanguage();
+  const { t, consumePendingFile, pendingFile } = useLanguage();
   const [fileOld, setFileOld] = useState<FileData | undefined>();
   const [fileNew, setFileNew] = useState<FileData | undefined>();
   
   useEffect(() => {
-    const file = consumePendingFile();
+    const file = consumePendingFile('diff');
     if (file) {
       (async () => {
         const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
@@ -417,7 +417,7 @@ const DiffTool: React.FC = () => {
         setFileOld(fileData);
       })();
     }
-  }, []);
+  }, [pendingFile]);
 
   // Multi-key support
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
@@ -631,7 +631,7 @@ const DiffTool: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 h-full flex flex-col min-h-0">
+    <div className="space-y-6 pb-20 min-h-full flex flex-col">
       <div className="shrink-0">
         <ToolHeader 
             title="CSV Diff"

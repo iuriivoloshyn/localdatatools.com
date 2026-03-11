@@ -38,7 +38,7 @@ const ConverterTool: React.FC = () => {
   const abortRef = useRef(false);
 
   useEffect(() => {
-    const file = consumePendingFile();
+    const file = consumePendingFile('converter');
     if (file) {
       addToQueue([file]);
     }
@@ -108,14 +108,17 @@ const ConverterTool: React.FC = () => {
           let target = undefined;
           
           if (isImage(f.name)) {
-              // If we have a master preference, use it
-              if (formatPreference) {
+              // If we have a master preference and it's different from source, use it
+              if (formatPreference && formatPreference !== ext && !(ext === 'jpeg' && formatPreference === 'jpg')) {
                   target = formatPreference;
               } else {
-                  // Standard defaults
-                  if (['jpg', 'jpeg', 'png', 'webp', 'heic'].includes(ext || '')) target = 'pdf';
-                  if (ext === 'heic') target = 'jpg'; // Override HEIC default to JPG
-                  if (ext === 'svg') target = 'png';
+                  // Smart defaults: pick the most useful conversion, never the same format
+                  if (ext === 'png') target = 'jpg';
+                  else if (ext === 'jpg' || ext === 'jpeg') target = 'png';
+                  else if (ext === 'webp') target = 'jpg';
+                  else if (ext === 'heic') target = 'jpg';
+                  else if (ext === 'svg') target = 'png';
+                  else target = 'jpg';
               }
           } else if (isAudio(f.name)) {
               target = 'mp3'; // Default audio target
@@ -271,8 +274,8 @@ const ConverterTool: React.FC = () => {
   const hasCompleted = queue.some(q => q.status === 'completed');
 
   return (
-    <div className="space-y-6">
-      <ToolHeader 
+    <div className="space-y-6 pb-20">
+      <ToolHeader
         title="File Converter"
         description="Universal format transformation engine. Convert spreadsheets, documents, images, audio, and video entirely in your browser."
         instructions={[
@@ -432,7 +435,7 @@ const ConverterTool: React.FC = () => {
                                     {/* Image Options */}
                                     {isImage(item.file.name) && item.status === 'idle' && (
                                         <div className="flex flex-wrap gap-2 mt-2">
-                                            {['jpg', 'png', 'webp', 'svg', 'pdf'].map(fmt => (
+                                            {['jpg', 'png', 'webp', 'svg', 'pdf'].filter(fmt => { const ext = item.file.name.split('.').pop()?.toLowerCase(); return fmt !== ext && !(ext === 'jpeg' && fmt === 'jpg'); }).map(fmt => (
                                                 <button 
                                                     key={fmt}
                                                     onClick={() => setItemTarget(item.id, fmt)} 

@@ -18,7 +18,7 @@ import Workbench from './dashboard/Workbench';
 import DashboardCanvas from './dashboard/DashboardCanvas';
 
 const InstantDashboardTool: React.FC = () => {
-    const { t, consumePendingFile } = useLanguage();
+    const { t, consumePendingFile, pendingFile } = useLanguage();
     
     // Global State
     const [view, setView] = useState<DashboardViewMode>('data');
@@ -40,7 +40,7 @@ const InstantDashboardTool: React.FC = () => {
     const configInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-      const file = consumePendingFile();
+      const file = consumePendingFile('dashboard');
       if (file) {
         (async () => {
           const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
@@ -60,7 +60,7 @@ const InstantDashboardTool: React.FC = () => {
           handleFileLoad(fileData);
         })();
       }
-    }, []);
+    }, [pendingFile]);
 
     // Helpers
     const activeSpace = spaces.find(s => s.id === activeSpaceId) || spaces[0];
@@ -464,7 +464,7 @@ const InstantDashboardTool: React.FC = () => {
     const isWorkbench = view === 'workbench';
 
     const content = (
-        <div className={`flex flex-col ${isFullScreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]/95 p-4 animate-in fade-in duration-300 overflow-hidden' : ''}`}>
+        <div className={`flex flex-col pb-20 ${isFullScreen ? 'fixed inset-0 z-[9999] bg-[#0d0d0d]/95 p-4 animate-in fade-in duration-300 overflow-hidden' : ''}`}>
             {!isFullScreen && (
                 <div className="shrink-0">
                     <ToolHeader 

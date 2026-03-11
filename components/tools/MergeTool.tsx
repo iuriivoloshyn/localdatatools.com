@@ -34,7 +34,7 @@ type MergeMode = 'append' | 'join';
 type JoinType = 'left' | 'inner';
 
 const MergeTool: React.FC = () => {
-  const { t, consumePendingFile } = useLanguage();
+  const { t, consumePendingFile, pendingFile } = useLanguage();
   const [mode, setMode] = useState<MergeMode>('join');
   const [primaryFile, setPrimaryFile] = useState<FileData | undefined>();
   const [appendQueue, setAppendQueue] = useState<FileData[]>([]);
@@ -58,7 +58,7 @@ const MergeTool: React.FC = () => {
   const [isSwapping, setIsSwapping] = useState(false);
 
   useEffect(() => {
-    const file = consumePendingFile();
+    const file = consumePendingFile('merge');
     if (file) {
       (async () => {
         const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
@@ -78,7 +78,7 @@ const MergeTool: React.FC = () => {
         setFileA(fileData);
       })();
     }
-  }, []);
+  }, [pendingFile]);
 
   useEffect(() => { if (fileA) setSelectedColsA(new Set(fileA.headers)); else setSelectedColsA(new Set()); }, [fileA]);
   useEffect(() => { if (fileB) { const cols = new Set(fileB.headers); if (keyB && cols.has(keyB)) cols.delete(keyB); setSelectedColsB(cols); } else setSelectedColsB(new Set()); }, [fileB, keyB]);
@@ -205,8 +205,8 @@ const MergeTool: React.FC = () => {
   const reset = () => { setPrimaryFile(undefined); setAppendQueue([]); setFileA(undefined); setFileB(undefined); setKeyA(''); setKeyB(''); setAnalysis(null); setStatus(MergeStatus.IDLE); setDownloadUrl(null); setError(null); setProgress(0); };
 
   return (
-    <div className="space-y-6">
-      <ToolHeader 
+    <div className="space-y-6 pb-20">
+      <ToolHeader
         title="CSV Fusion"
         description="The ultimate engine for high-speed CSV operations. Merge datasets horizontally with lookups or stack them vertically for bulk log analysis."
         instructions={[

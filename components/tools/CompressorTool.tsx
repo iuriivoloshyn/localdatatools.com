@@ -42,24 +42,24 @@ interface QueueItem {
 }
 
 const CompressorTool: React.FC = () => {
-  const { t, consumePendingFile } = useLanguage();
+  const { t, consumePendingFile, pendingFile } = useLanguage();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [mode, setMode] = useState<Mode>('general');
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  
-  // Settings
-  const [imageQuality, setImageQuality] = useState(0.7);
-  
+
+  // Settings — targetSizeRatio: 0.05 to 1.0 (5% to 100% of original size)
+  const [targetSizeRatio, setTargetSizeRatio] = useState(0.5);
+
   // Refs for estimation loop
   const processingRef = useRef(false);
 
   useEffect(() => {
-    const file = consumePendingFile();
+    const file = consumePendingFile('compressor');
     if (file) {
       handleFiles([file]);
     }
-  }, []);
+  }, [pendingFile]);
 
   const getPdfJs = async () => {
       const pdfjsModule = await import('pdfjs-dist');
@@ -79,7 +79,7 @@ const CompressorTool: React.FC = () => {
               item.status === 'idle' ? { ...item, estimatedSize: undefined, isEstimating: false } : item
           ));
       }
-  }, [imageQuality]);
+  }, [targetSizeRatio]);
 
   // When mode changes, invalidate all estimates
   useEffect(() => {
@@ -106,18 +106,21 @@ const CompressorTool: React.FC = () => {
               let est = target.originalSize;
 
               if (mode === 'media') {
-                  // Explicitly handle 100% quality -> No change
-                  if (imageQuality >= 1.0) {
+                  if (targetSizeRatio >= 1.0) {
                       est = target.originalSize;
                   } else if (target.file.type.startsWith('image/')) {
-                      // Fast estimation for images
-                      const options = {
-                          maxSizeMB: 50, // High limit so quality drives compression
+                      // Use ratio to drive both quality and max size for predictable output
+                      const targetMB = Math.max(0.005, (target.originalSize / (1024 * 1024)) * targetSizeRatio);
+                      const quality = Math.max(0.1, Math.min(0.95, targetSizeRatio));
+                      const opts: any = {
+                          maxSizeMB: targetMB,
                           useWebWorker: true,
-                          initialQuality: imageQuality,
+                          initialQuality: quality,
                       };
-                      const compressed = await imageCompression(target.file, options);
-                      est = compressed.size;
+                      // PNG is lossless (ignores quality), so convert to JPEG for real compression
+                      if (target.file.type === 'image/png') opts.fileType = 'image/jpeg';
+                      const compressed = await imageCompression(target.file, opts);
+                      est = Math.min(compressed.size, target.originalSize);
                   } else if (target.file.name.endsWith('.pdf')) {
                       // PDF Estimation
                       let canvas = target.pdfPreviewCanvas;
@@ -139,7 +142,7 @@ const CompressorTool: React.FC = () => {
                       }
 
                       // Compress the canvas (Cached or New)
-                      const blob = await new Promise<Blob | null>(r => canvas!.toBlob(r, 'image/jpeg', imageQuality));
+                      const blob = await new Promise<Blob | null>(r => canvas!.toBlob(r, 'image/jpeg', targetSizeRatio));
                       
                       // overhead: ~10% for PDF structure
                       if (blob) est = (blob.size * pages) * 1.1;
@@ -201,7 +204,7 @@ const CompressorTool: React.FC = () => {
       // Trigger loop
       const interval = setInterval(estimateNext, 100);
       return () => clearInterval(interval);
-  }, [queue, mode, imageQuality]);
+  }, [queue, mode, targetSizeRatio]);
 
 
   const processGeneral = async (files: File[]) => {
@@ -256,7 +259,7 @@ const CompressorTool: React.FC = () => {
           if (!context) throw new Error("Canvas context failed");
 
           await page.render({ canvasContext: context, viewport }).promise;
-          const imgData = canvas.toDataURL('image/jpeg', imageQuality);
+          const imgData = canvas.toDataURL('image/jpeg', targetSizeRatio);
           const pdfPageWidth = newPdf.internal.pageSize.getWidth();
           const pdfPageHeight = newPdf.internal.pageSize.getHeight();
           newPdf.addImage(imgData, 'JPEG', 0, 0, pdfPageWidth, pdfPageHeight, undefined, 'FAST');
@@ -266,20 +269,48 @@ const CompressorTool: React.FC = () => {
   };
 
   const processMedia = async (file: File): Promise<Blob> => {
-      if (imageQuality >= 1.0) return file; // Bypass if 100%
+      if (targetSizeRatio >= 1.0) return file; // Bypass if 100%
 
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
           return await processPdf(file);
       }
       if (!file.type.startsWith('image/')) return file;
-      
-      const options = {
-          maxSizeMB: 50, 
+
+      // Use ratio to drive both quality and max size for predictable output
+      const targetMB = Math.max(0.005, (file.size / (1024 * 1024)) * targetSizeRatio);
+      const quality = Math.max(0.1, Math.min(0.95, targetSizeRatio));
+      const opts: any = {
+          maxSizeMB: targetMB,
           useWebWorker: true,
-          initialQuality: imageQuality,
+          initialQuality: quality,
       };
-      
-      return await imageCompression(file, options);
+      // PNG is lossless (ignores quality), so convert to JPEG for real compression
+      if (file.type === 'image/png') opts.fileType = 'image/jpeg';
+      const compressed = await imageCompression(file, opts);
+
+      if (compressed.size < file.size) return compressed;
+      return file;
+  };
+
+  const switchMode = (newMode: Mode) => {
+    if (newMode === mode) return;
+    setUploadError(null);
+    // Move existing queue items to new mode, reset status for re-estimation
+    setQueue(prev => {
+      if (prev.length === 0) return prev;
+      return prev.map(item => ({
+        ...item,
+        mode: newMode,
+        status: 'idle' as const,
+        estimatedSize: undefined,
+        isEstimating: false,
+        newSize: undefined,
+        resultBlob: undefined,
+        resultUrl: undefined,
+        error: undefined,
+      }));
+    });
+    setMode(newMode);
   };
 
   const handleFiles = (files: File[]) => {
@@ -420,6 +451,10 @@ const CompressorTool: React.FC = () => {
       completed.forEach(item => {
           let name = item.file.name;
           if (mode === 'analyst' && !name.endsWith('.gz')) name += '.gz';
+          if (mode === 'media' && item.file.type.startsWith('image/') && item.resultBlob) {
+              const ext = item.resultBlob.type === 'image/webp' ? '.webp' : item.resultBlob.type === 'image/jpeg' ? '.jpg' : '';
+              if (ext) name = name.replace(/\.[^.]+$/, ext);
+          }
           zip.file(name, item.resultBlob!);
       });
 
@@ -486,6 +521,11 @@ const CompressorTool: React.FC = () => {
       };
   }, [queue, mode]);
 
+  // For the slider: compute total original size and target size display
+  const totalOriginalBytes = useMemo(() => {
+      return queue.filter(q => q.mode === mode && q.status === 'idle').reduce((acc, q) => acc + q.originalSize, 0);
+  }, [queue, mode]);
+
   const getModeDescription = () => {
       switch(mode) {
           case 'general': return "Combines all files into a single standard .zip archive. Best for bundling multiple files for sharing.";
@@ -496,8 +536,8 @@ const CompressorTool: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <ToolHeader 
+    <div className="space-y-6 pb-20">
+      <ToolHeader
         title="Compressor"
         description="Secure, offline file reduction. Compress logs (GZIP), archives (ZIP), and media (Images/PDF) entirely on your device."
         instructions={[
@@ -515,19 +555,19 @@ const CompressorTool: React.FC = () => {
       <div className="flex flex-col items-center mb-8 gap-4">
         <div className="bg-gray-900/50 p-1.5 rounded-2xl border border-gray-700 flex gap-2">
           <button 
-            onClick={() => { setMode('general'); setQueue([]); setUploadError(null); }}
+            onClick={() => { switchMode('general'); }}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'general' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/20' : 'text-gray-400 hover:bg-gray-800'}`}
           >
             <Archive size={16} /> Archive (ZIP)
           </button>
           <button 
-            onClick={() => { setMode('analyst'); setQueue([]); setUploadError(null); }}
+            onClick={() => { switchMode('analyst'); }}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'analyst' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/20' : 'text-gray-400 hover:bg-gray-800'}`}
           >
             <Database size={16} /> Stream (GZIP)
           </button>
           <button 
-            onClick={() => { setMode('media'); setQueue([]); setUploadError(null); }}
+            onClick={() => { switchMode('media'); }}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'media' ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/20' : 'text-gray-400 hover:bg-gray-800'}`}
           >
             <ImageIcon size={16} /> Media (Img/PDF)
@@ -583,23 +623,23 @@ const CompressorTool: React.FC = () => {
                       {mode === 'media' ? (
                           <div className="w-full space-y-6">
                               <div className="flex justify-between items-end">
-                                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Quality Level</span>
-                                  <span className="text-2xl font-black text-violet-400">{Math.round(imageQuality * 100)}%</span>
+                                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Compression</span>
+                                  <span className="text-2xl font-black text-violet-400">{targetSizeRatio >= 1.0 ? 'None' : targetSizeRatio >= 0.7 ? 'Light' : targetSizeRatio >= 0.4 ? 'Medium' : targetSizeRatio >= 0.2 ? 'Heavy' : 'Maximum'}</span>
                               </div>
                               <div className="relative h-2 bg-gray-800 rounded-full">
-                                  <input 
-                                      type="range" 
-                                      min="0.1" max="1.0" step="0.05" 
-                                      value={imageQuality} 
-                                      onChange={(e) => setImageQuality(parseFloat(e.target.value))}
+                                  <input
+                                      type="range"
+                                      min="0.05" max="1.0" step="0.05"
+                                      value={targetSizeRatio}
+                                      onChange={(e) => setTargetSizeRatio(parseFloat(e.target.value))}
                                       className="absolute w-full h-full opacity-0 cursor-pointer z-10"
                                   />
-                                  <div className="absolute top-0 left-0 h-full bg-violet-500 rounded-full transition-all duration-100" style={{ width: `${imageQuality * 100}%` }}></div>
-                                  <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg border-2 border-violet-600 transition-all duration-100 pointer-events-none" style={{ left: `calc(${imageQuality * 100}% - 8px)` }}></div>
+                                  <div className="absolute top-0 left-0 h-full bg-violet-500 rounded-full transition-all duration-100" style={{ width: `${targetSizeRatio * 100}%` }}></div>
+                                  <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg border-2 border-violet-600 transition-all duration-100 pointer-events-none" style={{ left: `calc(${targetSizeRatio * 100}% - 8px)` }}></div>
                               </div>
                               <div className="flex justify-between text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                                  <span>Smaller Size</span>
-                                  <span>Better Quality</span>
+                                  <span>Smallest</span>
+                                  <span>Original</span>
                               </div>
                           </div>
                       ) : (
@@ -665,7 +705,7 @@ const CompressorTool: React.FC = () => {
                                               <p className="text-sm font-medium text-gray-200 truncate max-w-[200px]">{item.file.name}</p>
                                               {/* Target Format Badge */}
                                               <span className="text-[10px] bg-gray-800 text-gray-500 px-1.5 rounded border border-gray-700">
-                                                  {mode === 'general' ? '→ .zip' : mode === 'analyst' ? '→ .gz' : '→ opt'}
+                                                  {mode === 'general' ? '→ .zip' : mode === 'analyst' ? '→ .gz' : item.file.type === 'image/png' ? '→ .jpg' : item.file.type === 'application/pdf' ? '→ .pdf' : '→ .jpg'}
                                               </span>
                                           </div>
                                           <p className="text-xs text-gray-500">{formatFileSize(item.originalSize)}</p>
@@ -706,9 +746,9 @@ const CompressorTool: React.FC = () => {
                                   <div className="shrink-0 flex items-center gap-2">
                                       {/* Download Single Button */}
                                       {item.status === 'done' && item.resultUrl && mode !== 'general' && (
-                                          <a 
-                                            href={item.resultUrl} 
-                                            download={mode === 'analyst' ? `${item.file.name}.gz` : item.file.name} 
+                                          <a
+                                            href={item.resultUrl}
+                                            download={mode === 'analyst' ? `${item.file.name}.gz` : mode === 'media' && item.file.type.startsWith('image/') && item.resultBlob ? (() => { const ext = item.resultBlob.type === 'image/webp' ? '.webp' : item.resultBlob.type === 'image/jpeg' ? '.jpg' : ''; return ext ? item.file.name.replace(/\.[^.]+$/, ext) : item.file.name; })() : item.file.name}
                                             className="p-2 bg-violet-600/20 text-violet-400 rounded-lg hover:bg-violet-600 hover:text-white transition-colors"
                                             title="Download"
                                           >

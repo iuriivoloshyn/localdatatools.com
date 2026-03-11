@@ -6,8 +6,8 @@ const OPENAPI_SPEC = {
   openapi: '3.0.3',
   info: {
     title: 'LocalDataTools API',
-    version: '1.1.0',
-    description: 'Privacy-first CSV processing API. Merge, join, and analyze CSV files via simple HTTP calls. Large files (up to 1GB) are encrypted at rest with AES-256-GCM — even the server operator cannot read them.',
+    version: '1.2.0',
+    description: 'Privacy-first file processing API. Merge, join, compare, and anonymize CSVs. Convert between image, audio, video, document, and spreadsheet formats. Compress files with gzip, zip, or lossy image optimization. Large files (up to 1GB) are encrypted at rest with AES-256-GCM.',
     contact: { url: 'https://localdatatools.com' },
   },
   servers: [
@@ -158,8 +158,8 @@ const OPENAPI_SPEC = {
     '/v1/csv/anonymize': {
       post: {
         tags: ['Direct (< 50MB)'],
-        summary: 'Mask or redact PII in CSV columns',
-        description: 'Auto-detects or manually targets columns containing PII (emails, phone numbers, names, SSNs) and masks or redacts them.',
+        summary: 'Anonymize CSV columns using a config',
+        description: 'Upload a CSV and a JSON config specifying per-column actions (map to NATO pseudonyms, shuffle, or keep). Returns a ZIP with the anonymized CSV and a deanonymization key file.',
         requestBody: {
           required: true,
           content: {
@@ -168,16 +168,41 @@ const OPENAPI_SPEC = {
                 type: 'object',
                 properties: {
                   file: { type: 'string', format: 'binary', description: 'CSV file to anonymize' },
-                  columns: { type: 'string', description: 'Comma-separated column names to mask (auto-detect if omitted)' },
-                  mode: { type: 'string', enum: ['mask', 'redact'], default: 'mask', description: 'mask = partial hiding, redact = full replacement' },
+                  config: { type: 'string', description: 'JSON string mapping column names to actions: map (NATO pseudonyms), shuffle, or keep. Example: {"name":{"action":"map","rename":"subject"},"age":{"action":"shuffle"}}' },
                 },
-                required: ['file'],
+                required: ['file', 'config'],
               },
             },
           },
         },
         responses: {
-          '200': { description: 'Anonymized CSV file', content: { 'text/csv': {} } },
+          '200': { description: 'ZIP containing anonymized CSV and deanonymization key file', content: { 'application/zip': {} } },
+          '400': { description: 'Bad request' },
+        },
+      },
+    },
+    '/v1/csv/deanonymize': {
+      post: {
+        tags: ['Direct (< 50MB)'],
+        summary: 'Restore anonymized CSV using key file',
+        description: 'Upload an anonymized CSV together with the deanonymization key file to reverse the mapping and restore original values.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'Anonymized CSV file' },
+                  key: { type: 'string', format: 'binary', description: 'JSON key file from the anonymize step' },
+                },
+                required: ['file', 'key'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Restored CSV', content: { 'text/csv': {} } },
           '400': { description: 'Bad request' },
         },
       },
