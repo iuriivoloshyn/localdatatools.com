@@ -100,11 +100,11 @@ const ConverterTool: React.FC = () => {
 
   // Video Master State
   const displayMasterVideoFormat = useMemo(() => {
-      const pendingVideo = queue.filter(q => q.status === 'idle' && isVideo(q.file.name));
-      if (pendingVideo.length === 0) return '';
+      const videoItems = queue.filter(q => isVideo(q.file.name));
+      if (videoItems.length === 0) return '';
 
-      const firstFmt = pendingVideo[0].targetFormat;
-      const allSame = pendingVideo.every(item => item.targetFormat === firstFmt);
+      const firstFmt = videoItems[0].targetFormat;
+      const allSame = videoItems.every(item => item.targetFormat === firstFmt);
 
       return allSame ? firstFmt : '';
   }, [queue]);

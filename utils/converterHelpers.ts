@@ -523,22 +523,10 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
 
     let args: string[] = ['-y', '-i', inputName];
 
+    // Browser FFmpeg.wasm: use stream copy (instant remux) for container changes.
+    // Re-encoding video in single-threaded WASM is too slow for practical use.
+    // Only GIF and audio extraction require re-encoding.
     switch (targetFormat) {
-        case 'mp4':
-            args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
-            break;
-        case 'webm':
-            args.push('-c:v', 'libvpx', '-crf', '30', '-b:v', '0', '-c:a', 'libvorbis', '-q:a', '4');
-            break;
-        case 'mov':
-            args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
-            break;
-        case 'avi':
-            args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
-            break;
-        case 'mkv':
-            args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
-            break;
         case 'gif':
             args.push('-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0');
             break;
@@ -546,6 +534,7 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
             args.push('-vn', '-c:a', 'libmp3lame', '-q:a', '2');
             break;
         default:
+            // Stream copy — changes container without re-encoding (fast)
             args.push('-c', 'copy');
     }
 
