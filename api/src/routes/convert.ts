@@ -276,6 +276,79 @@ const FFMPEG_ARGS: Record<string, string[]> = {
   wma: ['-c:a', 'wmav2', '-b:a', '192k'],
 };
 
+// POST /v1/convert/video - Convert between video formats using FFmpeg
+const VIDEO_FORMATS = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'gif'] as const;
+const VIDEO_MIMES: Record<string, string> = {
+  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+  avi: 'video/x-msvideo', mkv: 'video/x-matroska', gif: 'image/gif',
+};
+
+const FFMPEG_VIDEO_ARGS: Record<string, string[]> = {
+  mp4: ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k'],
+  webm: ['-c:v', 'libvpx', '-crf', '30', '-b:v', '0', '-c:a', 'libvorbis', '-q:a', '4'],
+  mov: ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k'],
+  avi: ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k'],
+  mkv: ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k'],
+  gif: ['-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0'],
+};
+
+convertRoutes.post('/video', async (c) => {
+  const body = await c.req.parseBody();
+  const file = body['file'] instanceof File ? body['file'] : null;
+  const format = typeof body['format'] === 'string' ? body['format'].toLowerCase() : '';
+
+  if (!file) {
+    return c.json({ error: 'Upload a video file as "file" form field.' }, 400);
+  }
+  if (file.size > LARGE_FILE_MAX) {
+    return c.json({ error: 'File exceeds 1GB limit.' }, 400);
+  }
+  const isLargeVideo = file.size > MAX_FILE_SIZE;
+  if (isLargeVideo && !isR2Configured()) {
+    return c.json({ error: 'Large file storage not configured.' }, 503);
+  }
+  if (!format || !VIDEO_FORMATS.includes(format as any)) {
+    return c.json({ error: `Specify "format" as one of: ${VIDEO_FORMATS.join(', ')}` }, 400);
+  }
+
+  const id = randomBytes(8).toString('hex');
+  const inputExt = file.name.split('.').pop() || 'bin';
+  const inputPath = join(tmpdir(), `ldt-in-${id}.${inputExt}`);
+  const outputPath = join(tmpdir(), `ldt-out-${id}.${format}`);
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    writeFileSync(inputPath, buffer);
+
+    const codecArgs = FFMPEG_VIDEO_ARGS[format] || ['-c', 'copy'];
+    const args = ['-y', '-i', inputPath, ...codecArgs, outputPath];
+
+    await execFileAsync('ffmpeg', args, { timeout: 300_000 });
+
+    const output = readFileSync(outputPath);
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+
+    if (isLargeVideo) {
+      const { jobId, fileKey } = await storeEncrypted(output, { contentType: VIDEO_MIMES[format] || 'application/octet-stream', fileName: `${baseName}.${format}` });
+      return c.json({ jobId, fileKey, downloadUrl: `/v1/jobs/${jobId}/download?key=${fileKey}`, expiresIn: '24 hours', size: output.length, note: 'File is encrypted at rest. The fileKey is required to decrypt — it is not stored on our servers.' });
+    }
+
+    return new Response(new Uint8Array(output), {
+      headers: {
+        'Content-Type': VIDEO_MIMES[format] || 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${baseName}.${format}"`,
+        'X-Original-Size': String(buffer.length),
+        'X-Output-Size': String(output.length),
+      },
+    });
+  } catch (err: any) {
+    return c.json({ error: `Video conversion failed: ${err.message || 'Unknown error'}` }, 500);
+  } finally {
+    if (existsSync(inputPath)) unlinkSync(inputPath);
+    if (existsSync(outputPath)) unlinkSync(outputPath);
+  }
+});
+
 convertRoutes.post('/audio', async (c) => {
   const body = await c.req.parseBody();
   const file = body['file'] instanceof File ? body['file'] : null;

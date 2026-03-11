@@ -26,6 +26,7 @@ const NAV_SECTIONS = [
       { id: 'convert-image', label: 'Image' },
       { id: 'convert-document', label: 'Document' },
       { id: 'convert-audio', label: 'Audio' },
+      { id: 'convert-video', label: 'Video' },
     ],
   },
   {
@@ -179,7 +180,7 @@ const OverviewPage = () => (
     <div className="space-y-4">
       <h1 className="text-3xl font-black text-white">Overview</h1>
       <p className="text-gray-400 text-lg max-w-2xl leading-relaxed">
-        The Local Data Tools API lets you process files programmatically — merge CSVs, convert between formats (images, audio, documents, spreadsheets), compress files, and anonymize data. All processing happens server-side with no data retained after the response.
+        The Local Data Tools API lets you process files programmatically — merge CSVs, convert between formats (images, audio, video, documents, spreadsheets), compress files, and anonymize data. All processing happens server-side with no data retained after the response.
       </p>
     </div>
 
@@ -571,6 +572,22 @@ const ConvertAudioPage = ({ k }: { k: (s: string) => string }) => (
   </div>
 );
 
+const ConvertVideoPage = ({ k }: { k: (s: string) => string }) => (
+  <div className="space-y-5">
+    <h1 className="text-3xl font-black text-white">Video Conversion</h1>
+    <p className="text-gray-400">Convert between video formats using FFmpeg. Supports MP4, WebM, MOV, AVI, MKV, and GIF.</p>
+    <Endpoint method="POST" path="/v1/convert/video" responseType="file" />
+    <ParamTable params={[
+      { name: 'file', type: 'file', required: true, desc: 'Video file to convert' },
+      { name: 'format', type: 'string', required: true, desc: 'mp4, webm, mov, avi, mkv, or gif' },
+    ]} />
+    <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
+  -F "file=@clip.mov" -F "format=mp4" \\
+  ${API_BASE}/v1/convert/video > clip.mp4`)}</CodeBlock>
+    <p className="text-gray-500 text-xs">Response headers: <code className="text-cyan-400">X-Original-Size</code>, <code className="text-cyan-400">X-Output-Size</code>. Timeout: 5 minutes. GIF output is scaled to 480px width at 10fps.</p>
+  </div>
+);
+
 const CompressionPage = ({ k }: { k: (s: string) => string }) => (
   <div className="space-y-5">
     <h1 className="text-3xl font-black text-white">Compression</h1>
@@ -708,6 +725,10 @@ const PAGE_SEO: Record<string, { title: string; description: string }> = {
     title: 'Audio Conversion API — MP3, WAV, FLAC, AAC, OGG',
     description: 'Convert audio files between MP3, WAV, FLAC, AAC, OGG, WebM, WMA, and M4A via API. FFmpeg-powered server-side conversion.',
   },
+  'convert-video': {
+    title: 'Video Conversion API — MP4, WebM, MOV, AVI, MKV, GIF',
+    description: 'Convert video files between MP4, WebM, MOV, AVI, MKV, and GIF via API. FFmpeg-powered server-side conversion with H.264 encoding.',
+  },
   'compression': {
     title: 'File Compression API — Gzip, ZIP, Image Optimization',
     description: 'Compress files via API. Gzip single files, create ZIP archives, or optimize images with lossy compression. Decompress gzip files.',
@@ -730,6 +751,7 @@ const PAGES: Record<string, React.FC<{ k: (s: string) => string; generatedKey: s
   'convert-image': ({ k }) => <ConvertImagePage k={k} />,
   'convert-document': ({ k }) => <ConvertDocumentPage k={k} />,
   'convert-audio': ({ k }) => <ConvertAudioPage k={k} />,
+  'convert-video': ({ k }) => <ConvertVideoPage k={k} />,
   'compression': ({ k }) => <CompressionPage k={k} />,
   'examples': ({ k }) => <ExamplesPage k={k} />,
 };

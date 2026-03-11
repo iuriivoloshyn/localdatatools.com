@@ -35,6 +35,7 @@ app.get('/', (c) => c.json({
     'POST /v1/convert/image  - Convert between PNG, JPEG, WebP, AVIF, TIFF, GIF',
     'POST /v1/convert/document - PDF -> TXT, DOCX, or JSON',
     'POST /v1/convert/audio  - Convert between MP3, WAV, FLAC, AAC, OGG, WebM, WMA',
+    'POST /v1/convert/video  - Convert between MP4, WebM, MOV, AVI, MKV, GIF',
     'POST /v1/compress       - Compress files (modes: gzip, zip, image)',
     'POST /v1/jobs/merge     - Large file merge via encrypted R2 storage (up to 1GB)',
     'POST /v1/jobs/join      - Large file join via encrypted R2 storage (up to 1GB)',

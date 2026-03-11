@@ -290,6 +290,33 @@ const OPENAPI_SPEC = {
         },
       },
     },
+    '/v1/convert/video': {
+      post: {
+        tags: ['File Conversion'],
+        summary: 'Convert between video formats',
+        description: 'Convert video files between MP4, WebM, MOV, AVI, MKV, and GIF using FFmpeg.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'Video file to convert' },
+                  format: { type: 'string', enum: ['mp4', 'webm', 'mov', 'avi', 'mkv', 'gif'], description: 'Target format' },
+                },
+                required: ['file', 'format'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Converted video file' },
+          '400': { description: 'Bad request' },
+          '500': { description: 'Conversion failed' },
+        },
+      },
+    },
     '/v1/compress': {
       post: {
         tags: ['Compression'],
