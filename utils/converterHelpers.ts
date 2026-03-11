@@ -584,13 +584,25 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
     activeConversion = conversion;
 
     console.log('[convertVideo] isValid:', conversion.isValid);
-    console.log('[convertVideo] discardedTracks:', conversion.discardedTracks);
+    console.log('[convertVideo] discardedTracks:', JSON.stringify(conversion.discardedTracks.map((dt: any) => ({ type: dt.track?.type, reason: dt.reason }))));
 
     if (!conversion.isValid) {
-        const reasons = conversion.discardedTracks
-            .map((dt: any) => `${dt.track?.type || 'unknown'}: ${dt.reason}`)
-            .join(', ');
-        throw new Error(`Conversion not possible: ${reasons || 'unknown reason'}. Try a different format.`);
+        // Filter out intentionally discarded tracks to find real problems
+        const realProblems = conversion.discardedTracks
+            .filter((dt: any) => dt.reason !== 'discarded_by_user');
+
+        if (realProblems.length > 0) {
+            const reasons = realProblems
+                .map((dt: any) => `${dt.track?.type || 'unknown'}: ${dt.reason}`)
+                .join(', ');
+            throw new Error(`Conversion not possible: ${reasons}. Try a different format.`);
+        }
+
+        // All discards were intentional but conversion still invalid — likely no tracks left
+        if (isAudioTarget) {
+            throw new Error('This video file has no audio track to extract.');
+        }
+        throw new Error('Conversion not possible: no compatible tracks found.');
     }
 
     conversion.onProgress = (progress: number) => {
