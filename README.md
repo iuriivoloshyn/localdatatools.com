@@ -24,16 +24,16 @@ Local Data Tools is a web application for data professionals who need to process
 - **Compressor** — ZIP, GZIP, or lossy media compression.
 - **AI Chat** — Gemma 2 LLM running locally via WebGPU.
 
+## Security & Privacy
+- **100% Offline Capable** — All browser tools work without internet after initial load.
+- **Zero Data Upload** — Files never leave your device for browser tools.
+- **Encrypted at Rest** — API large file results use AES-256 encryption via R2.
+
 ## API
 
 RESTful API for server-side processing. Endpoints for CSV merge/join/diff/anonymize, file conversion (spreadsheet, image, document, audio), and compression. Supports files up to 1GB via encrypted R2 storage. Zero data retention — files are processed in memory and discarded after the response.
 
 See [API docs](https://localdatatools.com/api-docs).
-
-## Security & Privacy
-- **100% Offline Capable** — All browser tools work without internet after initial load.
-- **Zero Data Upload** — Files never leave your device for browser tools.
-- **Encrypted at Rest** — API large file results use AES-256 encryption via R2.
 
 ## Tech Stack
 
