@@ -524,21 +524,46 @@ export const resetFFmpeg = () => {
 let activeConversion: any = null;
 
 export const convertVideo = async (file: File, targetFormat: string): Promise<ConversionResult> => {
+    const mediabunny = await import('mediabunny');
     const {
         Input, Output, Conversion, ALL_FORMATS,
         BlobSource, BufferTarget,
         Mp4OutputFormat, MovOutputFormat, WebMOutputFormat, MkvOutputFormat,
-    } = await import('mediabunny');
+        WavOutputFormat, Mp3OutputFormat, OggOutputFormat, FlacOutputFormat, AdtsOutputFormat,
+        canEncodeAudio,
+    } = mediabunny;
 
-    const formatMap: Record<string, () => any> = {
+    // Audio extraction formats
+    const audioFormats: Record<string, () => any> = {
+        mp3: () => new Mp3OutputFormat(),
+        wav: () => new WavOutputFormat(),
+        ogg: () => new OggOutputFormat(),
+        flac: () => new FlacOutputFormat(),
+        aac: () => new AdtsOutputFormat(),
+    };
+
+    // Video container formats
+    const videoFormats: Record<string, () => any> = {
         mp4: () => new Mp4OutputFormat(),
         mov: () => new MovOutputFormat(),
         webm: () => new WebMOutputFormat(),
         mkv: () => new MkvOutputFormat(),
     };
 
-    if (!formatMap[targetFormat]) {
-        throw new Error(`Video format "${targetFormat}" is not supported for browser conversion. Supported: MP4, MOV, WebM, MKV.`);
+    const isAudioTarget = targetFormat in audioFormats;
+    const formatFactory = audioFormats[targetFormat] || videoFormats[targetFormat];
+
+    if (!formatFactory) {
+        throw new Error(`Format "${targetFormat}" is not supported. Supported: MP4, MOV, WebM, MKV, MP3, WAV, OGG, FLAC, AAC.`);
+    }
+
+    // Register MP3 encoder if needed (browsers don't support MP3 encoding natively)
+    if (targetFormat === 'mp3') {
+        const canMp3 = await canEncodeAudio('mp3');
+        if (!canMp3) {
+            const { registerMp3Encoder } = await import('@mediabunny/mp3-encoder');
+            registerMp3Encoder();
+        }
     }
 
     const input = new Input({
@@ -546,7 +571,7 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
         source: new BlobSource(file),
     });
     const output = new Output({
-        format: formatMap[targetFormat](),
+        format: formatFactory(),
         target: new BufferTarget(),
     });
 
@@ -563,6 +588,7 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
     const buffer: ArrayBuffer = (output.target as any).buffer;
     const mimeMap: Record<string, string> = {
         mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska',
+        mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac',
     };
     const blob = new Blob([buffer], { type: mimeMap[targetFormat] || `video/${targetFormat}` });
     const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;

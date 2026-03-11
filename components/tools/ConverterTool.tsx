@@ -375,6 +375,8 @@ const ConverterTool: React.FC = () => {
                                         <option value="webm">To WebM</option>
                                         <option value="mov">To MOV</option>
                                         <option value="mkv">To MKV</option>
+                                        <option value="mp3">Audio (MP3)</option>
+                                        <option value="wav">Audio (WAV)</option>
                                     </select>
                                     <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none group-hover:text-cyan-400 transition-colors" />
                                 </div>
@@ -466,7 +468,7 @@ const ConverterTool: React.FC = () => {
                                     {/* Video Options */}
                                     {isVideo(item.file.name) && item.status === 'idle' && (
                                         <div className="flex flex-wrap gap-2 mt-2">
-                                            {['mp4', 'webm', 'mov', 'mkv'].filter(fmt => fmt !== (item.file.name.split('.').pop()?.toLowerCase())).map(fmt => (
+                                            {['mp4', 'webm', 'mov', 'mkv', 'mp3', 'wav'].filter(fmt => fmt !== (item.file.name.split('.').pop()?.toLowerCase())).map(fmt => (
                                                 <button
                                                     key={fmt}
                                                     onClick={() => setItemTarget(item.id, fmt)}
@@ -475,7 +477,7 @@ const ConverterTool: React.FC = () => {
                                                             ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300 font-bold shadow-sm shadow-cyan-900/20'
                                                             : 'border-gray-700 text-gray-500 hover:text-gray-300 hover:bg-gray-800'}`}
                                                 >
-                                                    {fmt}
+                                                    {['mp3', 'wav'].includes(fmt) ? `${fmt} ♪` : fmt}
                                                 </button>
                                             ))}
                                         </div>

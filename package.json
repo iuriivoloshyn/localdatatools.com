@@ -13,6 +13,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^1.32.0",
+    "@mediabunny/mp3-encoder": "^1.39.0",
     "@mlc-ai/web-llm": "0.2.80",
     "browser-image-compression": "2.0.2",
     "docx": "7.8.2",
