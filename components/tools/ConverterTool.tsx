@@ -130,7 +130,7 @@ const ConverterTool: React.FC = () => {
           } else if (isAudio(f.name)) {
               target = 'mp3'; // Default audio target
           } else if (isVideo(f.name)) {
-              target = 'mp4'; // Default video target
+              target = ext === 'mp4' ? 'webm' : 'mp4'; // Default video target
           } else {
               // Document defaults
               if (ext === 'pdf') target = 'image';
@@ -448,7 +448,7 @@ const ConverterTool: React.FC = () => {
                                     {/* Audio Options */}
                                     {isAudio(item.file.name) && item.status === 'idle' && (
                                         <div className="flex flex-wrap gap-2 mt-2">
-                                            {['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma'].map(fmt => (
+                                            {['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma'].filter(fmt => fmt !== (item.file.name.split('.').pop()?.toLowerCase())).map(fmt => (
                                                 <button
                                                     key={fmt}
                                                     onClick={() => setItemTarget(item.id, fmt)}
@@ -466,7 +466,7 @@ const ConverterTool: React.FC = () => {
                                     {/* Video Options */}
                                     {isVideo(item.file.name) && item.status === 'idle' && (
                                         <div className="flex flex-wrap gap-2 mt-2">
-                                            {['mp4', 'webm', 'mov', 'avi', 'gif', 'mp3'].map(fmt => (
+                                            {['mp4', 'webm', 'mov', 'avi', 'gif', 'mp3'].filter(fmt => fmt !== (item.file.name.split('.').pop()?.toLowerCase())).map(fmt => (
                                                 <button
                                                     key={fmt}
                                                     onClick={() => setItemTarget(item.id, fmt)}
