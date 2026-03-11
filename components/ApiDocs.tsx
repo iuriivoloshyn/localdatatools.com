@@ -818,7 +818,7 @@ const ApiDocs: React.FC = () => {
         <PageComponent k={k} generatedKey={generatedKey} setGeneratedKey={setGeneratedKey} />
 
         {/* Footer */}
-        <div className="flex flex-col items-center gap-4 pt-12 mt-16 border-t border-white/[0.06]">
+        <div className="flex flex-col items-center gap-4 pt-12 mt-16 pb-16 border-t border-white/[0.06]">
           <a
             href="https://t.me/localdatatoolsfr"
             target="_blank"

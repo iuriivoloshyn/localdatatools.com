@@ -21,7 +21,7 @@ app.use('*', cors({ origin: '*' }));
 // Health check (no auth)
 app.get('/', (c) => c.json({
   name: 'LocalDataTools API',
-  version: '1.1.0',
+  version: '1.2.0',
   docs: '/docs',
   endpoints: [
     'POST /v1/csv/merge      - Append (stack) CSV files vertically (< 50MB)',
