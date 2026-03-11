@@ -19,6 +19,7 @@ const AiChatTool = React.lazy(() => import('./components/tools/AiChatTool'));
 const CompressorTool = React.lazy(() => import('./components/tools/CompressorTool'));
 const GenerateCsvTool = React.lazy(() => import('./components/tools/GenerateCsvTool'));
 const InstantDashboardTool = React.lazy(() => import('./components/tools/InstantDashboardTool'));
+const ApiDocs = React.lazy(() => import('./components/ApiDocs'));
 
 // Expanded Context
 const AppContext = createContext<{
@@ -279,9 +280,31 @@ const SidebarButton: React.FC<SidebarButtonProps> = ({ config, isActive, isProMo
 const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) => void }> = ({ onNavigateReady }) => {
   const { lang, setLang, t, isProMode, setIsProMode } = useLanguage();
   const { downloadModelOnly, progressVal: modelProgress, isLoading: modelLoading } = useGemma();
-  
-  const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | null>(null);
-  const [visitedTools, setVisitedTools] = useState<Set<string>>(new Set());
+
+  // URL-based routing
+  const TOOL_SLUGS: Record<string, ToolType | 'dashboard'> = {
+    'dashboard': 'dashboard', 'csv-fusion': 'merge', 'csv-diff': 'diff',
+    'smart-csv-editor': 'ai-csv-editor', 'ocr': 'ocr', 'converter': 'converter',
+    'viewer': 'viewer', 'anonymizer': 'anonymizer', 'metadata': 'metadata',
+    'compressor': 'compressor', 'ai-chat': 'chat', 'csv-generator': 'generate-csv',
+  };
+  const TOOL_TO_SLUG = Object.fromEntries(
+    Object.entries(TOOL_SLUGS).map(([slug, id]) => [id, slug])
+  );
+
+  const getToolFromPath = (): ToolType | 'dashboard' | 'api-docs' | null => {
+    const slug = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
+    if (slug === 'api-docs' || slug.startsWith('api-docs/')) return 'api-docs';
+    return slug ? (TOOL_SLUGS[slug] || null) : null;
+  };
+
+  const initialTool = getToolFromPath();
+  const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | 'api-docs' | null>(initialTool);
+  const [visitedTools, setVisitedTools] = useState<Set<string>>(() => {
+    const set = new Set<string>();
+    if (initialTool) set.add(initialTool);
+    return set;
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFeatureRequestOpen, setIsFeatureRequestOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -471,13 +494,37 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
     return () => { document.body.style.overflow = ''; };
   }, [isZenMode]);
 
-  const handleToolClick = (tool: ToolType | 'dashboard' | null) => {
+  const handleToolClick = (tool: ToolType | 'dashboard' | 'api-docs' | null) => {
     if (tool === activeTool) return;
     if (tool) {
         setVisitedTools(prev => new Set(prev).add(tool));
     }
     setActiveTool(tool);
+    // Update URL
+    const slug = tool === 'api-docs' ? 'api-docs' : tool ? (TOOL_TO_SLUG[tool] || tool) : '';
+    const newPath = slug ? `/${slug}` : '/';
+    window.history.pushState(null, '', newPath);
+    // Update title
+    if (!tool) {
+      document.title = 'Local Data Tools';
+    } else if (tool === 'api-docs') {
+      document.title = 'API Docs — Local Data Tools';
+    } else {
+      const toolConfig = TOOLS_LIST.find(t => t.id === tool);
+      document.title = toolConfig ? `${toolConfig.label} — Local Data Tools` : 'Local Data Tools';
+    }
   };
+
+  // Browser back/forward navigation
+  useEffect(() => {
+    const onPopState = () => {
+      const tool = getToolFromPath();
+      if (tool) setVisitedTools(prev => new Set(prev).add(tool));
+      setActiveTool(tool);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   useEffect(() => {
     onNavigateReady?.(handleToolClick as (tool: ToolType) => void);
@@ -689,6 +736,7 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
                      ))}
                   </nav>
                   <div className="mt-auto pt-8 pb-6 px-3 flex flex-col gap-6">
+                    <button onClick={() => handleToolClick('api-docs')} className={`text-xs font-medium transition-colors px-2 py-1 rounded ${activeTool === 'api-docs' ? 'text-indigo-400' : 'text-gray-500 hover:text-white'}`}>API</button>
                     <div className="flex flex-col items-center gap-0 group opacity-80 hover:opacity-100 transition-all duration-300">
                         <span className="text-[5.5px] font-bold text-gray-500 uppercase tracking-[0.25em] text-center mb-0.5">Created by</span>
                         <a href="https://ivlabs.xyz" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-px font-mono text-sm bg-gray-900 border border-white/[0.06] px-4 py-2 rounded-xl transition-all ${theme.creatorBorder} ${theme.creatorShadow}`}><span className="text-gray-300 font-bold group-hover:text-white transition-colors">ivlabs</span><span className={`${theme.creatorAccent} font-bold`}>.xyz</span><span className={`w-1.5 h-3 rounded-[1px] ml-[1px] ${theme.creatorDot}`}></span></a>
@@ -710,6 +758,7 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
                           {visitedTools.has('compressor') && <div className={activeTool === 'compressor' ? 'block h-full' : 'hidden h-full'}><CompressorTool /></div>}
                           {visitedTools.has('generate-csv') && <div className={activeTool === 'generate-csv' ? 'block h-full' : 'hidden h-full'}><GenerateCsvTool /></div>}
                           {visitedTools.has('dashboard') && <div className={activeTool === 'dashboard' ? 'block h-full' : 'hidden h-full'}><InstantDashboardTool /></div>}
+                          {activeTool === 'api-docs' && <ApiDocs />}
                       </Suspense>
                   </div>
                 </main>
