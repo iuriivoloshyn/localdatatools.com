@@ -246,19 +246,17 @@ csvRoutes.post('/metadata', async (c) => {
   });
 });
 
-// Category word pools for anonymization mapping
-const ANON_CATEGORIES: Record<string, string[]> = {
-  colors: ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime', 'Teal', 'Indigo', 'Violet', 'Gold', 'Silver', 'Bronze', 'Crimson', 'Azure', 'Beige', 'Brown', 'Coral', 'Ivory', 'Khaki', 'Lavender', 'Maroon', 'Navy', 'Olive', 'Peach', 'Salmon', 'Tan'],
-  animals: ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Hawk', 'Shark', 'Whale', 'Dolphin', 'Panda', 'Koala', 'Leopard', 'Cheetah', 'Elephant', 'Giraffe', 'Zebra', 'Rhino', 'Hippo', 'Kangaroo', 'Penguin', 'Owl', 'Falcon', 'Panther', 'Cobra', 'Python', 'Viper', 'Lynx', 'Jaguar', 'Bison'],
-  fruits: ['Apple', 'Banana', 'Orange', 'Grape', 'Strawberry', 'Blueberry', 'Raspberry', 'Mango', 'Pineapple', 'Kiwi', 'Peach', 'Pear', 'Plum', 'Cherry', 'Lemon', 'Lime', 'Grapefruit', 'Watermelon', 'Melon', 'Papaya', 'Fig', 'Date', 'Apricot', 'Blackberry', 'Cranberry', 'Coconut', 'Lychee', 'Olive', 'Pomegranate', 'Tangerine'],
-  cities: ['New York', 'London', 'Tokyo', 'Paris', 'Berlin', 'Moscow', 'Beijing', 'Sydney', 'Toronto', 'Dubai', 'Rome', 'Madrid', 'Mumbai', 'Cairo', 'Rio', 'Seoul', 'Bangkok', 'Singapore', 'Istanbul', 'Chicago', 'Los Angeles', 'Houston', 'Phoenix', 'Lima', 'Bogota', 'Mexico City', 'Jakarta', 'Delhi', 'Lagos', 'Kinshasa'],
-  tech: ['Quantum', 'Cyber', 'Nano', 'Hyper', 'Mega', 'Giga', 'Tera', 'Peta', 'Exa', 'Zetta', 'Yotta', 'Flux', 'Plasma', 'Laser', 'Sonic', 'Astro', 'Cosmo', 'Stellar', 'Solar', 'Lunar', 'Galactic', 'Orbital', 'Digital', 'Analog', 'Virtual', 'Neural', 'Binary', 'Logic', 'Data', 'Code'],
-  nato: ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa', 'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey', 'X-ray', 'Yankee', 'Zulu'],
-};
+// NATO phonetic alphabet for anonymization (default and recommended)
+const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa', 'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey', 'Xray', 'Yankee', 'Zulu'];
+
+// Auto-calculate digit precision based on unique values per column
+function natoDigits(uniqueCount: number): number {
+  if (uniqueCount <= NATO.length) return 0;
+  return Math.ceil(Math.log10(Math.ceil(uniqueCount / NATO.length)));
+}
 
 interface ColumnConfigInput {
   action: 'keep' | 'shuffle' | 'map';
-  category?: string;
   rename?: string;
 }
 
@@ -279,7 +277,7 @@ csvRoutes.post('/anonymize', async (c) => {
     return c.json({ error: 'Large file storage not configured.' }, 503);
   }
   if (!configParam) {
-    return c.json({ error: 'Provide a "config" JSON field. Example: {"name":{"action":"map","category":"animals"},"age":{"action":"shuffle"}}' }, 400);
+    return c.json({ error: 'Provide a "config" JSON field. Example: {"name":{"action":"map"},"age":{"action":"shuffle"}}' }, 400);
   }
 
   let config: Record<string, ColumnConfigInput>;
@@ -299,12 +297,6 @@ csvRoutes.post('/anonymize', async (c) => {
     const action = config[col].action;
     if (!['keep', 'shuffle', 'map'].includes(action)) {
       return c.json({ error: `Invalid action "${action}" for column "${col}". Use: keep, shuffle, map` }, 400);
-    }
-    if (action === 'map') {
-      const cat = config[col].category || 'colors';
-      if (!ANON_CATEGORIES[cat]) {
-        return c.json({ error: `Invalid category "${cat}". Available: ${Object.keys(ANON_CATEGORIES).join(', ')}` }, 400);
-      }
     }
   }
 
@@ -330,26 +322,24 @@ csvRoutes.post('/anonymize', async (c) => {
   for (const [col, cfg] of Object.entries(config)) {
     if (cfg.action === 'map') {
       const uniqueVals = Array.from(mapCollectors[col]);
-      const category = cfg.category || 'colors';
-      const pool = ANON_CATEGORIES[category];
+      const digits = natoDigits(uniqueVals.length);
       const map = new Map<string, string>();
       const keyMap: Record<string, string> = {};
-      const usedValues = new Set<string>();
 
-      for (const val of uniqueVals) {
-        let anonVal = '';
-        let attempts = 0;
-        while (true) {
-          const word = pool[Math.floor(Math.random() * pool.length)];
-          const num = Math.floor(Math.random() * 999900) + 100;
-          const candidate = `${word}${num}`;
-          if (!usedValues.has(candidate)) { anonVal = candidate; break; }
-          attempts++;
-          if (attempts > 50) { anonVal = `${word}${num}_${Math.random().toString(36).substring(2, 8)}`; break; }
+      // Shuffle NATO words for randomized assignment
+      const shuffledNato = [...NATO].sort(() => Math.random() - 0.5);
+
+      for (let i = 0; i < uniqueVals.length; i++) {
+        const word = shuffledNato[i % NATO.length];
+        let anonVal: string;
+        if (digits === 0) {
+          anonVal = word;
+        } else {
+          const num = Math.floor(i / NATO.length);
+          anonVal = `${word}${String(num).padStart(digits, '0')}`;
         }
-        usedValues.add(anonVal);
-        map.set(val, anonVal);
-        keyMap[val] = anonVal;
+        map.set(uniqueVals[i], anonVal);
+        keyMap[uniqueVals[i]] = anonVal;
       }
       generatedMaps[col] = map;
       keyFileMappings[col] = keyMap;

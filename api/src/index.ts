@@ -29,7 +29,7 @@ app.get('/', (c) => c.json({
     'POST /v1/csv/analyze    - Analyze CSV compatibility',
     'POST /v1/csv/diff       - Compare two CSV files',
     'POST /v1/csv/metadata   - Extract column types, stats, null rates',
-    'POST /v1/csv/anonymize    - Anonymize CSV columns (map/shuffle/keep) with key file',
+    'POST /v1/csv/anonymize    - Anonymize CSV columns (NATO encoding, auto-scaling digits)',
     'POST /v1/csv/deanonymize  - Restore anonymized CSV using key file',
     'POST /v1/convert/spreadsheet - CSV <-> Excel conversion',
     'POST /v1/convert/image  - Convert between PNG, JPEG, WebP, AVIF, TIFF, GIF',
