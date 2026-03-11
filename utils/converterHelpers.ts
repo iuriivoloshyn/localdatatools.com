@@ -511,6 +511,71 @@ export const convertAudio = async (file: File, targetFormat: string): Promise<Co
     };
 };
 
+export const convertVideo = async (file: File, targetFormat: string): Promise<ConversionResult> => {
+    console.log(`[convertVideo] Starting conversion of ${file.name} to ${targetFormat}`);
+    const ffmpeg = await getFFmpeg();
+    const inputExt = file.name.split('.').pop()?.toLowerCase() || 'mp4';
+    const inputName = `input_${Date.now()}.${inputExt}`;
+    const outputName = `output_${Date.now()}.${targetFormat}`;
+
+    console.log(`[convertVideo] Writing file ${inputName} to virtual FS...`);
+    await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+    let args: string[] = ['-y', '-i', inputName];
+
+    switch (targetFormat) {
+        case 'mp4':
+            args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
+            break;
+        case 'webm':
+            args.push('-c:v', 'libvpx', '-crf', '30', '-b:v', '0', '-c:a', 'libvorbis', '-q:a', '4');
+            break;
+        case 'mov':
+            args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
+            break;
+        case 'avi':
+            args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
+            break;
+        case 'mkv':
+            args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k');
+            break;
+        case 'gif':
+            args.push('-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0');
+            break;
+        case 'mp3':
+            args.push('-vn', '-c:a', 'libmp3lame', '-q:a', '2');
+            break;
+        default:
+            args.push('-c', 'copy');
+    }
+
+    args.push(outputName);
+
+    console.log(`[convertVideo] Executing ffmpeg with args:`, args);
+    await ffmpeg.exec(args);
+
+    const data = await ffmpeg.readFile(outputName);
+    const mimeMap: Record<string, string> = {
+        mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+        avi: 'video/x-msvideo', mkv: 'video/x-matroska', gif: 'image/gif',
+        mp3: 'audio/mpeg'
+    };
+    const blob = new Blob([data], { type: mimeMap[targetFormat] || `video/${targetFormat}` });
+
+    const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+
+    await ffmpeg.deleteFile(inputName);
+    await ffmpeg.deleteFile(outputName);
+
+    console.log(`[convertVideo] Conversion finished successfully.`);
+    return {
+        name: `${baseName}.${targetFormat}`,
+        blob: blob,
+        url: URL.createObjectURL(blob),
+        type: targetFormat
+    };
+};
+
 export const detectAndConvert = async (file: File, targetFormat?: string): Promise<ConversionResult> => {
     const ext = file.name.split('.').pop()?.toLowerCase();
     
@@ -564,11 +629,10 @@ export const detectAndConvert = async (file: File, targetFormat?: string): Promi
     }
     
     // Audio
-    const audioExts = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm', 'wma'];
+    const audioExts = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'wma'];
     if (audioExts.includes(ext || '')) {
         let target = targetFormat || 'mp3';
         if (target === ext) {
-            // If same format, just return the original file
             return {
                 name: file.name,
                 blob: file,
@@ -578,6 +642,21 @@ export const detectAndConvert = async (file: File, targetFormat?: string): Promi
         }
         return convertAudio(file, target);
     }
-    
+
+    // Video
+    const videoExts = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv'];
+    if (videoExts.includes(ext || '')) {
+        let target = targetFormat || 'mp4';
+        if (target === ext) {
+            return {
+                name: file.name,
+                blob: file,
+                url: URL.createObjectURL(file),
+                type: target
+            };
+        }
+        return convertVideo(file, target);
+    }
+
     throw new Error(`Unsupported file type: .${ext}`);
 };
