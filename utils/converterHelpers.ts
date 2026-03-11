@@ -575,13 +575,23 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
         target: new BufferTarget(),
     });
 
-    const conversionOpts: any = { input, output };
+    const conversionOpts: any = { input, output, showDiscardWarnings: false };
     // When extracting audio, explicitly discard the video track
     if (isAudioTarget) {
         conversionOpts.video = { discard: true };
     }
     const conversion = await Conversion.init(conversionOpts);
     activeConversion = conversion;
+
+    console.log('[convertVideo] isValid:', conversion.isValid);
+    console.log('[convertVideo] discardedTracks:', conversion.discardedTracks);
+
+    if (!conversion.isValid) {
+        const reasons = conversion.discardedTracks
+            .map((dt: any) => `${dt.track?.type || 'unknown'}: ${dt.reason}`)
+            .join(', ');
+        throw new Error(`Conversion not possible: ${reasons || 'unknown reason'}. Try a different format.`);
+    }
 
     conversion.onProgress = (progress: number) => {
         console.log(`[convertVideo] ${Math.round(progress * 100)}%`);
