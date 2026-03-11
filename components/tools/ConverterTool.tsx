@@ -60,10 +60,10 @@ const ConverterTool: React.FC = () => {
 
   // --- Master Switch Logic ---
 
-  const hasImagesInQueue = queue.some(q => isImage(q.file.name));
-  const hasPdfsInQueue = queue.some(q => q.file.name.toLowerCase().endsWith('.pdf'));
-  const hasAudioInQueue = queue.some(q => isAudio(q.file.name));
-  const hasVideoInQueue = queue.some(q => isVideo(q.file.name));
+  const hasImagesInQueue = queue.filter(q => isImage(q.file.name)).length > 1;
+  const hasPdfsInQueue = queue.filter(q => q.file.name.toLowerCase().endsWith('.pdf')).length > 1;
+  const hasAudioInQueue = queue.filter(q => isAudio(q.file.name)).length > 1;
+  const hasVideoInQueue = queue.filter(q => isVideo(q.file.name)).length > 1;
 
   // Image Master State
   const displayMasterImageFormat = useMemo(() => {
