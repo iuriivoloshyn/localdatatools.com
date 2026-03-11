@@ -30,7 +30,7 @@ export enum MergeStatus {
   ERROR = 'error'
 }
 
-export type ToolType = 'merge' | 'diff' | 'ocr' | 'ai-csv-editor' | 'converter' | 'viewer' | 'anonymizer' | 'metadata' | 'chat' | 'compressor';
+export type ToolType = 'merge' | 'diff' | 'ocr' | 'ai-csv-editor' | 'converter' | 'viewer' | 'anonymizer' | 'metadata' | 'chat' | 'compressor' | 'generate-csv';
 
 export type Language = 'en' | 'ru';
 

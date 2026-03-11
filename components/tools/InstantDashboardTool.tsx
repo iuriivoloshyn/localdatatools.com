@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useLanguage } from '../../App';
 import { DashboardViewMode, DashboardSpace, ExtendedWidgetConfig, ExtendedColumnAnalysis } from './dashboard/types';
 import { analyzeColumns } from '../../utils/dashboardHelpers';
-import { parseCSVLine, detectDelimiter } from '../../utils/csvHelpers';
+import { parseCSVLine, detectDelimiter, parseCsvPreview, parseExcelPreview } from '../../utils/csvHelpers';
 import { FileData } from '../../types';
 import { LayoutDashboard, Table, BarChart2, Layout, Maximize2, Minimize2, X, ChevronRight, Save, Upload, Download, AlertTriangle } from 'lucide-react';
 
@@ -18,7 +18,7 @@ import Workbench from './dashboard/Workbench';
 import DashboardCanvas from './dashboard/DashboardCanvas';
 
 const InstantDashboardTool: React.FC = () => {
-    const { t } = useLanguage();
+    const { t, consumePendingFile } = useLanguage();
     
     // Global State
     const [view, setView] = useState<DashboardViewMode>('data');
@@ -38,6 +38,29 @@ const InstantDashboardTool: React.FC = () => {
     const [chatHistory, setChatHistory] = useState<{role: 'user'|'model', content: string}[]>([]);
 
     const configInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+      const file = consumePendingFile();
+      if (file) {
+        (async () => {
+          const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
+          const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+          let previewData: Partial<FileData> = { headers: [], previewRows: [] };
+          try {
+            if (isExcel) previewData = await parseExcelPreview(file);
+            else if (isCsv) previewData = await parseCsvPreview(file);
+          } catch (e) { console.warn('Preview parsing failed', e); }
+          const fileData: FileData = {
+            id: Math.random().toString(36).substr(2, 9),
+            file,
+            headers: previewData.headers || [],
+            previewRows: previewData.previewRows || [],
+            sizeFormatted: previewData.sizeFormatted || '0 B'
+          };
+          handleFileLoad(fileData);
+        })();
+      }
+    }, []);
 
     // Helpers
     const activeSpace = spaces.find(s => s.id === activeSpaceId) || spaces[0];
@@ -454,7 +477,7 @@ const InstantDashboardTool: React.FC = () => {
                             "Save your layout to JSON and restore it later on similar CSVs"
                         ]}
                         icon={LayoutDashboard}
-                        colorClass="text-violet-400"
+                        colorClass="text-lime-400"
                         onReset={handleReset}
                         badge="Alpha"
                     />
@@ -466,7 +489,7 @@ const InstantDashboardTool: React.FC = () => {
                     <FileUploader 
                         onFileLoaded={handleFileLoad} 
                         disabled={false}
-                        theme="violet"
+                        theme="lime"
                         limitText="Large files supported. Local processing."
                         accept=".csv"
                     />

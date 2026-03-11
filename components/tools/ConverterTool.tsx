@@ -26,7 +26,7 @@ interface QueueItem {
 }
 
 const ConverterTool: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, consumePendingFile } = useLanguage();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
@@ -35,6 +35,13 @@ const ConverterTool: React.FC = () => {
   const [formatPreference, setFormatPreference] = useState<string>('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const file = consumePendingFile();
+    if (file) {
+      addToQueue([file]);
+    }
+  }, []);
 
   const isImage = (name: string) => {
       const ext = name.split('.').pop()?.toLowerCase() || '';

@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import FileUploader from '../FileUploader';
 import ToolHeader from '../layout/ToolHeader';
 import { FileData } from '../../types';
-import { 
+import { parseCsvPreview, parseExcelPreview } from '../../utils/csvHelpers';
+import {
   Sparkles, Play, Download, Trash2, Undo2, AlertCircle, Table, BrainCircuit, 
   Code, RefreshCw, Eye, EyeOff, Shield, RotateCcw, History, Save, ZapOff,
   Terminal, ShieldCheck, Database, Loader2, Cpu, Lock, CheckCircle, List,
@@ -166,10 +167,33 @@ const runWorkerTransformation = (data: any[], code: string, onProgress: (pct: nu
 };
 
 const AiCsvEditorTool: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, consumePendingFile } = useLanguage();
   const { engine, isModelLoaded, isLoading: isModelLoading, progress: modelProgress, progressVal: modelProgressVal, error: modelError, initGemma } = useGemma();
 
   const [file, setFile] = useState<FileData | undefined>();
+
+  useEffect(() => {
+    const pending = consumePendingFile();
+    if (pending) {
+      (async () => {
+        const isCsv = pending.type === 'text/csv' || pending.name.toLowerCase().endsWith('.csv');
+        const isExcel = pending.name.toLowerCase().endsWith('.xlsx') || pending.name.toLowerCase().endsWith('.xls');
+        let previewData: Partial<FileData> = { headers: [], previewRows: [] };
+        try {
+          if (isExcel) previewData = await parseExcelPreview(pending);
+          else if (isCsv) previewData = await parseCsvPreview(pending);
+        } catch (e) { console.warn('Preview parsing failed', e); }
+        const fileData: FileData = {
+          id: Math.random().toString(36).substr(2, 9),
+          file: pending,
+          headers: previewData.headers || [],
+          previewRows: previewData.previewRows || [],
+          sizeFormatted: previewData.sizeFormatted || '0 B'
+        };
+        setFile(fileData);
+      })();
+    }
+  }, []);
   const fullDataRef = useRef<any[]>([]);
   const originalDataRef = useRef<any[]>([]);
   const historyRef = useRef<any[][]>([]); 

@@ -5,17 +5,16 @@ import { FileData } from '../../types';
 import { Download, Play, AlertCircle, VenetianMask, Shuffle, ArrowRight, Database, Type, Shield, FileKey, RefreshCw, Archive, Check, Upload } from 'lucide-react';
 import { useLanguage } from '../../App';
 import JSZip from 'jszip';
-import { parseCSVLine } from '../../utils/csvHelpers';
+import { parseCSVLine, parseCsvPreview, parseExcelPreview } from '../../utils/csvHelpers';
 import { read, utils, write } from 'xlsx';
 
-const CATEGORIES = {
-  colors: ['Red', 'Blue', 'Green', 'Yellow', 'Purple', 'Orange', 'Pink', 'Cyan', 'Magenta', 'Lime', 'Teal', 'Indigo', 'Violet', 'Gold', 'Silver', 'Bronze', 'Crimson', 'Azure', 'Beige', 'Brown', 'Coral', 'Ivory', 'Khaki', 'Lavender', 'Maroon', 'Navy', 'Olive', 'Peach', 'Salmon', 'Tan', 'White', 'Black', 'Gray'],
-  animals: ['Lion', 'Tiger', 'Bear', 'Wolf', 'Fox', 'Eagle', 'Hawk', 'Shark', 'Whale', 'Dolphin', 'Panda', 'Koala', 'Leopard', 'Cheetah', 'Elephant', 'Giraffe', 'Zebra', 'Rhino', 'Hippo', 'Kangaroo', 'Penguin', 'Owl', 'Falcon', 'Panther', 'Cobra', 'Python', 'Viper', 'Lynx', 'Jaguar', 'Bison', 'Moose', 'Elk'],
-  fruits: ['Apple', 'Banana', 'Orange', 'Grape', 'Strawberry', 'Blueberry', 'Raspberry', 'Mango', 'Pineapple', 'Kiwi', 'Peach', 'Pear', 'Plum', 'Cherry', 'Lemon', 'Lime', 'Grapefruit', 'Watermelon', 'Melon', 'Papaya', 'Fig', 'Date', 'Apricot', 'Blackberry', 'Cranberry', 'Coconut', 'Lychee', 'Olive', 'Pomegranate', 'Tangerine'],
-  cities: ['New York', 'London', 'Tokyo', 'Paris', 'Berlin', 'Moscow', 'Beijing', 'Sydney', 'Toronto', 'Dubai', 'Rome', 'Madrid', 'Mumbai', 'Cairo', 'Rio', 'Seoul', 'Bangkok', 'Singapore', 'Istanbul', 'Chicago', 'Los Angeles', 'Houston', 'Phoenix', 'Lima', 'Bogota', 'Mexico City', 'Jakarta', 'Delhi', 'Lagos', 'Kinshasa'],
-  tech: ['Quantum', 'Cyber', 'Nano', 'Hyper', 'Mega', 'Giga', 'Tera', 'Peta', 'Exa', 'Zetta', 'Yotta', 'Flux', 'Plasma', 'Laser', 'Sonic', 'Astro', 'Cosmo', 'Stellar', 'Solar', 'Lunar', 'Galactic', 'Orbital', 'Digital', 'Analog', 'Virtual', 'Neural', 'Binary', 'Logic', 'Data', 'Code'],
-  nato: ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa', 'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey', 'X-ray', 'Yankee', 'Zulu']
-};
+const NATO = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa', 'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey', 'Xray', 'Yankee', 'Zulu'];
+
+/** Calculate the number of digits needed to cover N unique values with 26 NATO words */
+function natoDigits(uniqueCount: number): number {
+  if (uniqueCount <= NATO.length) return 0;
+  return Math.ceil(Math.log10(Math.ceil(uniqueCount / NATO.length)));
+}
 
 const TEXT = {
   // ... (Dictionary remains same)
@@ -101,12 +100,10 @@ const safeCsvField = (field: string | number | undefined | null): string => {
 };
 
 type ColumnAction = 'keep' | 'shuffle' | 'map';
-type CategoryKey = keyof typeof CATEGORIES;
 type Mode = 'anonymize' | 'deanonymize';
 
 interface ColumnConfig {
   action: ColumnAction;
-  category?: CategoryKey;
   renameTo?: string;
 }
 
@@ -126,7 +123,7 @@ interface KeyFileStructure {
 }
 
 const AnonymizerTool: React.FC = () => {
-  const { lang } = useLanguage();
+  const { lang, consumePendingFile } = useLanguage();
   const txt = TEXT[lang];
   const [mode, setMode] = useState<Mode>('anonymize');
   
@@ -146,6 +143,31 @@ const AnonymizerTool: React.FC = () => {
   const [keyData, setKeyData] = useState<KeyFileStructure | null>(null);
   const [deanonymizeConfigs, setDeanonymizeConfigs] = useState<Record<string, DeanonymizeConfig>>({});
   
+  // --- PENDING FILE CONSUMPTION ---
+
+  useEffect(() => {
+    const pending = consumePendingFile();
+    if (pending) {
+      (async () => {
+        const isCsv = pending.type === 'text/csv' || pending.name.toLowerCase().endsWith('.csv');
+        const isExcel = pending.name.toLowerCase().endsWith('.xlsx') || pending.name.toLowerCase().endsWith('.xls');
+        let previewData: Partial<FileData> = { headers: [], previewRows: [] };
+        try {
+          if (isExcel) previewData = await parseExcelPreview(pending);
+          else if (isCsv) previewData = await parseCsvPreview(pending);
+        } catch (e) { console.warn('Preview parsing failed', e); }
+        const fileData: FileData = {
+          id: Math.random().toString(36).substr(2, 9),
+          file: pending,
+          headers: previewData.headers || [],
+          previewRows: previewData.previewRows || [],
+          sizeFormatted: previewData.sizeFormatted || '0 B'
+        };
+        setFile(fileData);
+      })();
+    }
+  }, []);
+
   // --- ANONYMIZE LOGIC ---
 
   useEffect(() => {
@@ -153,7 +175,7 @@ const AnonymizerTool: React.FC = () => {
       setColumns(file.headers);
       const initialConfigs: Record<string, ColumnConfig> = {};
       file.headers.forEach(h => {
-        initialConfigs[h] = { action: 'keep', category: 'colors', renameTo: h };
+        initialConfigs[h] = { action: 'keep', renameTo: h };
       });
       setConfigs(initialConfigs);
       setDownloadUrl(null);
@@ -223,31 +245,38 @@ const AnonymizerTool: React.FC = () => {
       columns.forEach(col => {
         if (configs[col].action === 'map') {
           const uniqueVals = Array.from(mapCollectors[col]);
-          const category = configs[col].category || 'colors';
-          const pool = CATEGORIES[category];
+          const digits = natoDigits(uniqueVals.length);
+          const maxNum = digits > 0 ? Math.pow(10, digits) : 0;
           const map = new Map<string, string>();
-          const keyMap: Record<string, string> = {}; 
+          const keyMap: Record<string, string> = {};
           const usedAnonValues = new Set<string>();
-          
+
+          // Shuffle NATO words for randomness
+          const shuffledNato = [...NATO].sort(() => Math.random() - 0.5);
+          let wordIdx = 0;
+          let numIdx = 0;
+
           uniqueVals.forEach((val) => {
-            let anonVal = '';
-            let attempts = 0;
-            
-            while (true) {
-                const word = pool[Math.floor(Math.random() * pool.length)];
-                const num = Math.floor(Math.random() * 999900) + 100; 
-                const candidate = `${word}${num}`;
-                
-                if (!usedAnonValues.has(candidate)) {
-                    anonVal = candidate;
-                    break;
-                }
-                attempts++;
-                if (attempts > 50) {
-                    const fallbackSuffix = Math.random().toString(36).substr(2, 6);
-                    anonVal = `${word}${num}_${fallbackSuffix}`;
-                    break;
-                }
+            let anonVal: string;
+
+            if (digits === 0) {
+              // Just NATO word, no digits needed
+              anonVal = shuffledNato[wordIdx % NATO.length];
+              wordIdx++;
+            } else {
+              // NATO word + zero-padded number
+              const word = shuffledNato[wordIdx % NATO.length];
+              const numStr = String(numIdx).padStart(digits, '0');
+              anonVal = `${word}${numStr}`;
+              numIdx++;
+              if (numIdx >= maxNum) { numIdx = 0; wordIdx++; }
+              // Move to next word after exhausting numbers
+              if (numIdx === 0 && wordIdx > 0) wordIdx++;
+            }
+
+            // Fallback for collisions (shouldn't happen with sequential assignment)
+            if (usedAnonValues.has(anonVal)) {
+              anonVal = `${anonVal}_${Math.random().toString(36).substr(2, 4)}`;
             }
 
             usedAnonValues.add(anonVal);
@@ -536,7 +565,7 @@ const AnonymizerTool: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 relative">
+    <div className="space-y-6 relative pb-16">
       <ToolHeader 
         title={txt.title}
         description={txt.desc}
@@ -616,20 +645,7 @@ const AnonymizerTool: React.FC = () => {
                       </div>
 
                       {configs[col]?.action === 'map' && (
-                        <div className="relative animate-in fade-in slide-in-from-left-2 duration-200">
-                          <select 
-                            value={configs[col].category}
-                            onChange={(e) => updateConfig(col, { category: e.target.value as CategoryKey })}
-                            className="appearance-none bg-gray-900 border border-gray-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-gray-300 focus:border-blue-500 focus:outline-none cursor-pointer w-32"
-                          >
-                            <option value="colors">Colors</option>
-                            <option value="animals">Animals</option>
-                            <option value="fruits">Fruits</option>
-                            <option value="cities">Cities</option>
-                            <option value="tech">Tech Terms</option>
-                            <option value="nato">NATO</option>
-                          </select>
-                        </div>
+                        <span className="text-[10px] text-gray-500 font-mono animate-in fade-in slide-in-from-left-2 duration-200">NATO</span>
                       )}
                     </div>
                   </div>
@@ -638,8 +654,15 @@ const AnonymizerTool: React.FC = () => {
             </div>
           )}
 
+          {file && Object.values(configs).some(c => c.action === 'map') && (
+            <div className="flex items-center justify-center gap-2 text-[11px] text-gray-500 mt-2">
+              <Shield size={12} className="text-blue-400/50 shrink-0" />
+              <span>{lang === 'ru' ? 'NATO-кодировка автоматически подстраивает количество цифр под число уникальных значений в каждой колонке (напр. Alpha, Bravo07, Charlie142).' : 'NATO encoding auto-adjusts digit precision based on unique values per column (e.g. Alpha, Bravo07, Charlie142).'}</span>
+            </div>
+          )}
+
           {file && !downloadUrl && (
-            <div className="flex justify-center">
+            <div className="flex justify-center mt-6">
               <button 
                 onClick={processAnonymization} 
                 disabled={processing}

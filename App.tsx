@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, Suspense, createContext, useContext } from 'react';
 import { ToolType, Language } from './types';
-import { Layers, Zap, ScanText, ChevronDown, Loader2, Snowflake, X, Maximize, Minimize, RotateCcw, BookOpen, Settings as SettingsIcon, RefreshCw, Eye, VenetianMask, BrainCircuit, Shield, HardDrive, Cpu, Lock, Database, Wrench, ArrowRight, Lightbulb, Fingerprint, MessageSquareText, MessageCircle, ExternalLink, Minimize2, GitCompare, Wifi, WifiOff, Download, CheckCircle2, Info, LayoutDashboard, Github, Code, Terminal } from 'lucide-react';
+import { Layers, Zap, ScanText, ChevronDown, Loader2, Snowflake, X, Maximize, Minimize, RotateCcw, BookOpen, Settings as SettingsIcon, RefreshCw, Eye, VenetianMask, BrainCircuit, Shield, HardDrive, Cpu, Lock, Database, Wrench, ArrowRight, Lightbulb, Fingerprint, MessageSquareText, MessageCircle, ExternalLink, Minimize2, GitCompare, Wifi, WifiOff, Download, CheckCircle2, Info, LayoutDashboard, Github, TableProperties, Table2 } from 'lucide-react';
 import Snowfall, { SnowfallLayerConfig } from './components/effects/Snowfall';
 import SantaFace from './components/effects/SantaFace';
 import { GemmaProvider, useGemma } from './contexts/GemmaContext';
@@ -17,22 +17,28 @@ const AiCsvEditorTool = React.lazy(() => import('./components/tools/AiCsvEditorT
 const MetadataTool = React.lazy(() => import('./components/tools/MetadataTool'));
 const AiChatTool = React.lazy(() => import('./components/tools/AiChatTool'));
 const CompressorTool = React.lazy(() => import('./components/tools/CompressorTool'));
+const GenerateCsvTool = React.lazy(() => import('./components/tools/GenerateCsvTool'));
 const InstantDashboardTool = React.lazy(() => import('./components/tools/InstantDashboardTool'));
-const ApiDocs = React.lazy(() => import('./components/ApiDocs'));
 
 // Expanded Context
-const AppContext = createContext<{ 
-  lang: Language; 
-  setLang: (l: Language) => void; 
+const AppContext = createContext<{
+  lang: Language;
+  setLang: (l: Language) => void;
   t: (key: string) => string;
   isProMode: boolean;
   setIsProMode: (val: boolean) => void;
+  navigateTo: (tool: ToolType, file?: File) => void;
+  pendingFile: File | null;
+  consumePendingFile: () => File | null;
 }>({
   lang: 'en',
   setLang: () => {},
   t: (k) => k,
   isProMode: true,
   setIsProMode: () => {},
+  navigateTo: () => {},
+  pendingFile: null,
+  consumePendingFile: () => null,
 });
 
 export const useLanguage = () => useContext(AppContext);
@@ -62,6 +68,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'sub_metadata': 'Analyze & Hash Scramble',
     'sub_ai_chat': 'Local AI Conversation with OCR',
     'sub_compressor': 'Smart Archive & Optimization',
+    'sub_generate_csv': 'Fake Data CSV Builder',
     'sub_dashboard': 'Instant BI Visualization',
     'processing': 'Processing...',
     'analyzing': 'Analyzing...',
@@ -142,6 +149,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
     'sub_metadata': 'Анализ и Хеш',
     'sub_ai_chat': 'Локальный ИИ чат с OCR',
     'sub_compressor': 'Архивация и Оптимизация',
+    'sub_generate_csv': 'Генератор CSV данных',
     'sub_dashboard': 'Мгновенная BI Визуализация',
     'processing': 'Обработка...',
     'analyzing': 'Анализ...',
@@ -211,14 +219,15 @@ interface ToolConfig {
 }
 
 const TOOLS_LIST: ToolConfig[] = [
-  { id: 'dashboard', label: 'Dashboard', subKey: 'sub_dashboard', icon: LayoutDashboard, color: 'text-violet-400', gradient: 'from-violet-500/20 to-purple-600/20', description: 'Auto-generate BI dashboards from CSV files with interactive charts.' },
+  { id: 'viewer', label: 'File Viewer', subKey: 'sub_viewer', icon: Eye, color: 'text-violet-400', gradient: 'from-violet-500/20 to-purple-600/20', description: 'Securely preview spreadsheets and documents locally.' },
+  { id: 'dashboard', label: 'Dashboard', subKey: 'sub_dashboard', icon: LayoutDashboard, color: 'text-lime-400', gradient: 'from-lime-500/20 to-green-600/20', description: 'Auto-generate BI dashboards from CSV files with interactive charts.' },
   { id: 'merge', label: 'CSV Fusion', subKey: 'sub_merge', icon: Layers, color: 'text-cyan-400', gradient: 'from-cyan-500/20 to-blue-600/20', description: 'Merge or append massive CSV files entirely in-browser.' },
   { id: 'diff', label: 'CSV Diff', subKey: 'sub_diff', icon: GitCompare, color: 'text-orange-400', gradient: 'from-orange-500/20 to-red-600/20', description: 'Compare two CSV files to spot added, removed, or modified rows instantly.' },
   { id: 'ai-csv-editor', label: 'Smart CSV Editor', subKey: 'sub_ai_editor', icon: BrainCircuit, color: 'text-fuchsia-400', gradient: 'from-fuchsia-500/20 to-purple-600/20', description: 'Use Natural Language to clean and transform datasets.' },
+  { id: 'generate-csv', label: 'CSV Generator', subKey: 'sub_generate_csv', icon: TableProperties, color: 'text-teal-400', gradient: 'from-teal-500/20 to-emerald-600/20', description: 'Generate CSV files with realistic fake data.' },
+  { id: 'anonymizer', label: 'Anonymizer', subKey: 'sub_anonymizer', icon: VenetianMask, color: 'text-zinc-400', gradient: 'from-zinc-500/20 to-slate-600/20', description: 'Scrub sensitive data with reversible key generation.' },
   { id: 'ocr', label: 'Image to Text', subKey: 'sub_ocr', icon: ScanText, color: 'text-blue-400', gradient: 'from-blue-500/20 to-indigo-600/20', description: 'Extract text from screenshots using local Tesseract or Cloud AI.' },
   { id: 'converter', label: 'Converter', subKey: 'sub_converter', icon: RefreshCw, color: 'text-emerald-400', gradient: 'from-emerald-500/20 to-teal-600/20', description: 'Switch between CSV, XLSX, PDF, and Images instantly.' },
-  { id: 'viewer', label: 'File Viewer', subKey: 'sub_viewer', icon: Eye, color: 'text-lime-400', gradient: 'from-lime-500/20 to-green-600/20', description: 'Securely preview spreadsheets and documents locally.' },
-  { id: 'anonymizer', label: 'Anonymizer', subKey: 'sub_anonymizer', icon: VenetianMask, color: 'text-zinc-400', gradient: 'from-zinc-500/20 to-slate-600/20', description: 'Scrub sensitive data with reversible key generation.' },
   { id: 'metadata', label: 'Metadata & Hash', subKey: 'sub_metadata', icon: Fingerprint, color: 'text-amber-400', gradient: 'from-amber-500/20 to-orange-600/20', description: 'View invisible metadata and scramble file hashes.' },
   { id: 'compressor', label: 'Compressor', subKey: 'sub_compressor', icon: Minimize2, color: 'text-violet-400', gradient: 'from-violet-500/20 to-purple-600/20', description: 'Smart archive creation and media optimization.' },
   { id: 'chat', label: 'AI Chat', subKey: 'sub_ai_chat', icon: MessageSquareText, color: 'text-rose-400', gradient: 'from-rose-500/20 to-pink-600/20', description: 'Interactive chat with persistent context and OCR image parsing.' },
@@ -267,34 +276,12 @@ const SidebarButton: React.FC<SidebarButtonProps> = ({ config, isActive, isProMo
 };
 
 // Main App Component Content (Separated for context usage)
-const AppContent: React.FC = () => {
+const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) => void }> = ({ onNavigateReady }) => {
   const { lang, setLang, t, isProMode, setIsProMode } = useLanguage();
   const { downloadModelOnly, progressVal: modelProgress, isLoading: modelLoading } = useGemma();
   
-  // URL-based routing: map path slugs to tool IDs
-  const TOOL_SLUGS: Record<string, ToolType | 'dashboard'> = {
-    'dashboard': 'dashboard', 'csv-fusion': 'merge', 'csv-diff': 'diff',
-    'smart-csv-editor': 'ai-csv-editor', 'ocr': 'ocr', 'converter': 'converter',
-    'viewer': 'viewer', 'anonymizer': 'anonymizer', 'metadata': 'metadata',
-    'compressor': 'compressor', 'ai-chat': 'chat',
-  };
-  const TOOL_TO_SLUG = Object.fromEntries(
-    Object.entries(TOOL_SLUGS).map(([slug, id]) => [id, slug])
-  );
-
-  const getToolFromPath = (): ToolType | 'dashboard' | 'api-docs' | null => {
-    const slug = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
-    if (slug === 'api-docs' || slug.startsWith('api-docs/')) return 'api-docs';
-    return slug ? (TOOL_SLUGS[slug] || null) : null;
-  };
-
-  const initialTool = getToolFromPath();
-  const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | 'api-docs' | null>(initialTool);
-  const [visitedTools, setVisitedTools] = useState<Set<string>>(() => {
-    const set = new Set<string>();
-    if (initialTool) set.add(initialTool);
-    return set;
-  });
+  const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | null>(null);
+  const [visitedTools, setVisitedTools] = useState<Set<string>>(new Set());
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFeatureRequestOpen, setIsFeatureRequestOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -414,6 +401,7 @@ const AppContent: React.FC = () => {
             import('./components/tools/MetadataTool'),
             import('./components/tools/AiChatTool'),
             import('./components/tools/CompressorTool'),
+            import('./components/tools/GenerateCsvTool'),
             import('./components/tools/InstantDashboardTool')
         ];
         
@@ -483,36 +471,17 @@ const AppContent: React.FC = () => {
     return () => { document.body.style.overflow = ''; };
   }, [isZenMode]);
 
-  // Sync browser back/forward with tool state
-  useEffect(() => {
-    const onPopState = () => {
-      const tool = getToolFromPath();
-      if (tool) setVisitedTools(prev => new Set(prev).add(tool));
-      setActiveTool(tool);
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
-
-  // Update document title when tool changes
-  useEffect(() => {
-    const toolConfig = TOOLS_LIST.find(t => t.id === activeTool);
-    document.title = toolConfig
-      ? `${toolConfig.label} — Local Data Tools`
-      : 'Local Data Tools — Free Browser-Based CSV, OCR & File Processing';
-  }, [activeTool]);
-
   const handleToolClick = (tool: ToolType | 'dashboard' | null) => {
     if (tool === activeTool) return;
     if (tool) {
         setVisitedTools(prev => new Set(prev).add(tool));
     }
-    // Update URL
-    const slug = tool === 'api-docs' ? 'api-docs' : TOOL_TO_SLUG[tool];
-    const newPath = tool ? `/${slug}` : '/';
-    window.history.pushState(null, '', newPath);
     setActiveTool(tool);
   };
+
+  useEffect(() => {
+    onNavigateReady?.(handleToolClick as (tool: ToolType) => void);
+  }, [onNavigateReady, handleToolClick]);
 
   const transitionClass = isTransitioning ? 'view-transition-exit' : 'view-transition-enter';
 
@@ -614,7 +583,6 @@ const AppContent: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <button onClick={() => handleToolClick('api-docs')} className="text-xs font-medium text-gray-500 hover:text-white transition-colors px-2 py-1">API</button>
                   <div className="relative h-9 w-9" ref={settingsRef}>
                     <button onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }} className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all shadow-sm p-0 bg-gray-900 border-white/[0.06] ${isSettingsOpen ? 'bg-gray-800 border-gray-700 text-white' : 'text-gray-400 hover:text-white hover:border-gray-600'}`}><SettingsIcon size={16} strokeWidth={2} /></button>
                     {isSettingsOpen && (
@@ -662,13 +630,7 @@ const AppContent: React.FC = () => {
             </div>
           </nav>
 
-          {activeTool === 'api-docs' ? (
-              <div key="api-docs" className={`flex-1 overflow-y-auto ${transitionClass}`}>
-                <Suspense fallback={<ToolLoader />}>
-                  <ApiDocs />
-                </Suspense>
-              </div>
-          ) : !activeTool ? (
+          {!activeTool ? (
               <div key="landing" className={`relative w-full flex-1 overflow-hidden flex flex-col items-center justify-center ${transitionClass}`}>
                    <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center">
                        <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] rounded-full transition-colors duration-1000" style={{ background: `radial-gradient(circle, ${theme.heroGlow} 0%, rgba(0,0,0,0) 70%)`, filter: 'blur(100px)', transform: 'translate3d(0,0,0)' }} />
@@ -680,7 +642,7 @@ const AppContent: React.FC = () => {
                            </h1>
                            <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto font-medium leading-relaxed">{t('hero_desc')}</p>
                        </div>
-                       <button onClick={() => handleToolClick('dashboard')} className={`group relative flex items-center gap-5 px-10 py-5 bg-gray-900/50 hover:bg-gray-800/80 border border-white/10 rounded-full transition-all duration-500 hover:scale-105 backdrop-blur-md ${theme.buttonBorder} ${theme.buttonGlow}`}>
+                       <button onClick={() => handleToolClick('viewer')} className={`group relative flex items-center gap-5 px-10 py-5 bg-gray-900/50 hover:bg-gray-800/80 border border-white/10 rounded-full transition-all duration-500 hover:scale-105 backdrop-blur-md ${theme.buttonBorder} ${theme.buttonGlow}`}>
                             <div className="flex flex-col items-start"><span className="text-sm font-bold text-gray-100 group-hover:text-white uppercase tracking-widest">{t('open_workspace')}</span><span className={`text-[10px] text-gray-500 font-mono transition-colors ${theme.textAccentHover}`}>{t('access_tools')}</span></div>
                             <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center transition-all shadow-lg group-hover:rotate-45 ${theme.buttonGradient} ${theme.buttonShadow}`}><ArrowRight size={22} className="text-white" /></div>
                        </button>
@@ -691,7 +653,7 @@ const AppContent: React.FC = () => {
                             })}
                        </div>
                        
-                       <a
+                       <a 
                           href="https://github.com/iuriivoloshyn/localdatatools.com"
                           target="_blank"
                           rel="noopener noreferrer"
@@ -713,7 +675,15 @@ const AppContent: React.FC = () => {
                      {TOOLS_LIST.map(tool => (
                        <React.Fragment key={tool.id}>
                          {tool.id === 'chat' && <div className="my-2 mx-3 border-t border-gray-800/50"></div>}
-                         {tool.id === 'merge' && <div className="my-2 mx-3 border-t border-gray-800/50"></div>}
+                         {tool.id === 'dashboard' && (
+                           <div className="mx-3 my-2 pt-2 border-t border-gray-800/50">
+                             <div className="flex items-center gap-1.5 px-1 pb-1">
+                               <Table2 size={9} className="text-gray-600" />
+                               <span className="text-[9px] font-bold text-gray-600 uppercase tracking-[0.2em]">CSV Suite</span>
+                             </div>
+                           </div>
+                         )}
+                         {tool.id === 'ocr' && <div className="my-2 mx-3 border-t border-gray-800/50"></div>}
                          <SidebarButton config={tool} isActive={activeTool === tool.id} isProMode={isProMode} onClick={() => handleToolClick(tool.id)} t={t} />
                        </React.Fragment>
                      ))}
@@ -738,6 +708,7 @@ const AppContent: React.FC = () => {
                           {visitedTools.has('anonymizer') && <div className={activeTool === 'anonymizer' ? 'block h-full' : 'hidden h-full'}><AnonymizerTool /></div>}
                           {visitedTools.has('metadata') && <div className={activeTool === 'metadata' ? 'block h-full' : 'hidden h-full'}><MetadataTool /></div>}
                           {visitedTools.has('compressor') && <div className={activeTool === 'compressor' ? 'block h-full' : 'hidden h-full'}><CompressorTool /></div>}
+                          {visitedTools.has('generate-csv') && <div className={activeTool === 'generate-csv' ? 'block h-full' : 'hidden h-full'}><GenerateCsvTool /></div>}
                           {visitedTools.has('dashboard') && <div className={activeTool === 'dashboard' ? 'block h-full' : 'hidden h-full'}><InstantDashboardTool /></div>}
                       </Suspense>
                   </div>
@@ -751,13 +722,26 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('en');
   const [isProMode, setIsProMode] = useState(true);
-  
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const navigateRef = useRef<(tool: ToolType) => void>(() => {});
+
   const t = (key: string) => DICTIONARY[lang][key] || key;
+
+  const navigateTo = (tool: ToolType, file?: File) => {
+    if (file) setPendingFile(file);
+    navigateRef.current(tool);
+  };
+
+  const consumePendingFile = () => {
+    const f = pendingFile;
+    setPendingFile(null);
+    return f;
+  };
 
   return (
     <GemmaProvider>
-      <AppContext.Provider value={{ lang, setLang, t, isProMode, setIsProMode }}>
-        <AppContent />
+      <AppContext.Provider value={{ lang, setLang, t, isProMode, setIsProMode, navigateTo, pendingFile, consumePendingFile }}>
+        <AppContent onNavigateReady={(fn) => { navigateRef.current = fn; }} />
       </AppContext.Provider>
     </GemmaProvider>
   );

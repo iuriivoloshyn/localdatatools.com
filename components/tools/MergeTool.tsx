@@ -5,7 +5,7 @@ import AnalysisPanel from '../AnalysisPanel';
 import ToolHeader from '../layout/ToolHeader';
 import { FileData, AnalysisResult, MergeStatus } from '../../types';
 import { analyzeBatch } from '../../services/localAnalysisService';
-import { findHeaderOffset, checkTrailingNewline } from '../../utils/csvHelpers';
+import { findHeaderOffset, checkTrailingNewline, parseCsvPreview, parseExcelPreview } from '../../utils/csvHelpers';
 import { Download, RefreshCw, Zap, Trash2, Plus, FileStack, ArrowRightLeft, ArrowDown, Columns, Rows, AlertCircle, Settings, ChevronDown, ChevronUp, Check, List, CheckSquare, Square, SlidersHorizontal, Info, Layers } from 'lucide-react';
 import { useLanguage } from '../../App';
 
@@ -34,7 +34,7 @@ type MergeMode = 'append' | 'join';
 type JoinType = 'left' | 'inner';
 
 const MergeTool: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, consumePendingFile } = useLanguage();
   const [mode, setMode] = useState<MergeMode>('join');
   const [primaryFile, setPrimaryFile] = useState<FileData | undefined>();
   const [appendQueue, setAppendQueue] = useState<FileData[]>([]);
@@ -56,6 +56,29 @@ const MergeTool: React.FC = () => {
   
   // Swap animation state
   const [isSwapping, setIsSwapping] = useState(false);
+
+  useEffect(() => {
+    const file = consumePendingFile();
+    if (file) {
+      (async () => {
+        const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
+        const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+        let previewData: Partial<FileData> = { headers: [], previewRows: [] };
+        try {
+          if (isExcel) previewData = await parseExcelPreview(file);
+          else if (isCsv) previewData = await parseCsvPreview(file);
+        } catch (e) { console.warn('Preview parsing failed', e); }
+        const fileData: FileData = {
+          id: Math.random().toString(36).substr(2, 9),
+          file,
+          headers: previewData.headers || [],
+          previewRows: previewData.previewRows || [],
+          sizeFormatted: previewData.sizeFormatted || '0 B'
+        };
+        setFileA(fileData);
+      })();
+    }
+  }, []);
 
   useEffect(() => { if (fileA) setSelectedColsA(new Set(fileA.headers)); else setSelectedColsA(new Set()); }, [fileA]);
   useEffect(() => { if (fileB) { const cols = new Set(fileB.headers); if (keyB && cols.has(keyB)) cols.delete(keyB); setSelectedColsB(cols); } else setSelectedColsB(new Set()); }, [fileB, keyB]);

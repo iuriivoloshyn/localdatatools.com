@@ -42,7 +42,7 @@ interface QueueItem {
 }
 
 const CompressorTool: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, consumePendingFile } = useLanguage();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [mode, setMode] = useState<Mode>('general');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -53,6 +53,13 @@ const CompressorTool: React.FC = () => {
   
   // Refs for estimation loop
   const processingRef = useRef(false);
+
+  useEffect(() => {
+    const file = consumePendingFile();
+    if (file) {
+      handleFiles([file]);
+    }
+  }, []);
 
   const getPdfJs = async () => {
       const pdfjsModule = await import('pdfjs-dist');

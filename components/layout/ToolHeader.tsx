@@ -94,6 +94,15 @@ const TOOL_CONTENT_TRANSLATIONS: Record<string, Record<string, { desc: string; s
         "Click 'Scramble Hash' to add an invisible watermark",
         "Download the new unique file"
       ]
+    },
+    'CSV Generator': {
+      desc: "Generate realistic CSV datasets with configurable columns, data types, and size. Use presets for common schemas or build your own from 30+ data types.",
+      steps: [
+        "Pick a preset template or click 'Random Schema' for instant setup",
+        "Configure each column: name, data type, uniqueness, and null percentage",
+        "Select row count from presets (100 to 10M) or enter a custom number",
+        "Click 'Preview' to inspect sample data, then 'Generate CSV' to create and download"
+      ]
     }
   },
   ru: {
@@ -175,6 +184,15 @@ const TOOL_CONTENT_TRANSLATIONS: Record<string, Record<string, { desc: string; s
         "Посмотрите текущий SHA-256 хеш файла",
         "Нажмите 'Изменить Хеш' для добавления невидимой маркировки",
         "Скачайте новый уникальный файл"
+      ]
+    },
+    'CSV Generator': {
+      desc: "Генерация реалистичных CSV с настраиваемыми колонками, типами данных и размером. Используйте шаблоны или создайте свою схему из 30+ типов данных.",
+      steps: [
+        "Выберите шаблон или нажмите 'Случайная схема' для быстрого старта",
+        "Настройте каждую колонку: имя, тип данных, уникальность и процент пустых",
+        "Выберите количество строк (от 100 до 10M) или введите своё число",
+        "Нажмите 'Предпросмотр' для проверки, затем 'Сгенерировать CSV' для скачивания"
       ]
     }
   }

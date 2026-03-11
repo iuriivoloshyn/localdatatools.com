@@ -3,10 +3,10 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import ToolHeader from '../layout/ToolHeader';
 import FileUploader from '../FileUploader';
 import { 
-  Eye, Upload, FileSpreadsheet, FileText, FileCode, FileType, File, Image as ImageIcon, 
-  Trash2, Plus, X, ChevronsLeft, Menu, Minimize2, Maximize2, Loader2, RefreshCw, 
+  Eye, Upload, FileSpreadsheet, FileText, FileCode, FileType, File, Image as ImageIcon,
+  Trash2, Plus, X, ChevronsLeft, Menu, Minimize2, Maximize2, Loader2, RefreshCw,
   AlertCircle, CheckSquare, Download, ChevronLeft, ChevronRight, Database,
-  Search, ExternalLink
+  Search, ExternalLink, ArrowRight, Send, Music, Video
 } from 'lucide-react';
 import { useLanguage } from '../../App';
 import { read, utils, write } from 'xlsx';
@@ -19,7 +19,7 @@ interface ViewerFile {
   id: string;
   name: string;
   sizeFormatted: string;
-  type: 'spreadsheet' | 'large_csv' | 'image' | 'pdf' | 'text' | 'code' | 'html' | 'docx' | 'unknown';
+  type: 'spreadsheet' | 'large_csv' | 'image' | 'pdf' | 'text' | 'code' | 'html' | 'docx' | 'audio' | 'video' | 'unknown';
   content: any;
   url?: string;
   file: File;
@@ -160,7 +160,7 @@ const PdfRenderer: React.FC<{ url: string }> = ({ url }) => {
               <div className="w-fit min-w-full mx-auto pt-10 pb-16 px-10 flex flex-col items-center">
                 {loading && (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400 py-20 w-full">
-                        <Loader2 className="animate-spin mb-4 text-lime-400" size={32} />
+                        <Loader2 className="animate-spin mb-4 text-violet-400" size={32} />
                         <p className="text-sm font-medium">Rendering PDF...</p>
                     </div>
                 )}
@@ -280,13 +280,14 @@ const HtmlRenderer: React.FC<{ content: string }> = ({ content }) => {
 };
 
 const ViewerTool: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, lang, navigateTo } = useLanguage();
   const [files, setFiles] = useState<ViewerFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showConvertMenu, setShowConvertMenu] = useState(false);
+  const [showSendToMenu, setShowSendToMenu] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -310,9 +311,40 @@ const ViewerTool: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const convertMenuRef = useRef<HTMLDivElement>(null);
+  const sendToMenuRef = useRef<HTMLDivElement>(null);
 
   // SAFEGUARD: Ensure files is defined before calling find
   const activeFile = useMemo(() => (files || []).find(f => f.id === activeFileId), [files, activeFileId]);
+
+  // "Send to" destinations based on file type
+  const sendToOptions = useMemo(() => {
+    if (!activeFile) return [];
+    const ext = activeFile.name.split('.').pop()?.toLowerCase() || '';
+    const opts: { id: string; label: string; labelRu: string }[] = [];
+    const isCsv = ext === 'csv' || activeFile.type === 'spreadsheet' || activeFile.type === 'large_csv';
+    const isXlsx = ext === 'xlsx' || ext === 'xls';
+    const isImage = activeFile.type === 'image';
+    const isPdf = activeFile.type === 'pdf';
+
+    if (isCsv || isXlsx) {
+      opts.push({ id: 'merge', label: 'CSV Fusion', labelRu: 'CSV Fusion' });
+      opts.push({ id: 'diff', label: 'CSV Diff', labelRu: 'CSV Diff' });
+      opts.push({ id: 'ai-csv-editor', label: 'Smart CSV Editor', labelRu: 'Smart CSV Editor' });
+      opts.push({ id: 'anonymizer', label: 'Anonymizer', labelRu: 'Анонимайзер' });
+      opts.push({ id: 'dashboard', label: 'Dashboard', labelRu: 'Dashboard' });
+    }
+    if (isImage) {
+      opts.push({ id: 'ocr', label: 'Image to Text', labelRu: 'Текст из изображения' });
+      opts.push({ id: 'metadata', label: 'Metadata & Hash', labelRu: 'Метаданные' });
+    }
+    // All file types can go to converter or compressor
+    opts.push({ id: 'converter', label: 'Converter', labelRu: 'Конвертер' });
+    opts.push({ id: 'compressor', label: 'Compressor', labelRu: 'Компрессор' });
+    if (isPdf) {
+      opts.push({ id: 'ocr', label: 'Image to Text', labelRu: 'Текст из изображения' });
+    }
+    return opts;
+  }, [activeFile]);
 
   const activeSheetData = useMemo(() => {
     if (!activeFile || activeFile.type !== 'spreadsheet' || !activeSheet) return null;
@@ -335,6 +367,9 @@ const ViewerTool: React.FC = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (convertMenuRef.current && !convertMenuRef.current.contains(event.target as Node)) {
         setShowConvertMenu(false);
+      }
+      if (sendToMenuRef.current && !sendToMenuRef.current.contains(event.target as Node)) {
+        setShowSendToMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -514,9 +549,16 @@ const ViewerTool: React.FC = () => {
             if (['js', 'ts', 'tsx', 'json', 'css', 'html'].includes(ext || '')) type = 'code';
             content = await file.text();
         } else if (ext === 'docx') {
-            type = 'docx'; 
-            // Store file directly for docx-preview rendering
-            content = null; 
+            type = 'docx';
+            content = null;
+        } else if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'opus', 'webm'].includes(ext || '')) {
+            type = 'audio';
+            url = URL.createObjectURL(file);
+            content = url;
+        } else if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext || '') && file.type.startsWith('video/')) {
+            type = 'video';
+            url = URL.createObjectURL(file);
+            content = url;
         }
 
         newFiles.push({
@@ -682,9 +724,11 @@ const ViewerTool: React.FC = () => {
           case 'large_csv': return <Database size={16} className="text-amber-400" />;
           case 'image': return <ImageIcon size={16} className="text-blue-400" />;
           case 'pdf': return <FileText size={16} className="text-red-400" />;
-          case 'code': return <FileCode size={16} className="text-lime-400" />;
+          case 'code': return <FileCode size={16} className="text-violet-400" />;
           case 'html': return <FileType size={16} className="text-blue-500" />;
           case 'docx': return <FileText size={16} className="text-blue-400" />;
+          case 'audio': return <Music size={16} className="text-pink-400" />;
+          case 'video': return <Video size={16} className="text-orange-400" />;
           default: return <File size={16} className="text-gray-400" />;
       }
   };
@@ -702,7 +746,7 @@ const ViewerTool: React.FC = () => {
             "Click the expand icon for an immersive Full-Screen experience"
           ]}
           icon={Eye}
-          colorClass="text-lime-400"
+          colorClass="text-violet-400"
           onReset={clearAllFiles}
         />
       )}
@@ -713,9 +757,9 @@ const ViewerTool: React.FC = () => {
                 onFilesSelected={handleFiles} 
                 multiple={true}
                 disabled={loading}
-                theme="lime"
-                limitText="Spreadsheets, Docs, Images, PDF"
-                accept=".csv,.xlsx,.xls,.ods,.pdf,.docx,.txt,.md,.json,.js,.ts,.tsx,.html,.css,.xml,.log,.png,.jpg,.jpeg,.webp,.gif,.svg"
+                theme="violet"
+                limitText="Spreadsheets, Docs, Images, PDF, Audio, Video"
+                accept=".csv,.xlsx,.xls,.ods,.pdf,.docx,.txt,.md,.json,.js,.ts,.tsx,.html,.css,.xml,.log,.png,.jpg,.jpeg,.webp,.gif,.svg,.mp3,.wav,.ogg,.flac,.aac,.m4a,.wma,.opus,.webm,.mp4,.mov,.avi,.mkv"
             />
         </div>
       ) : (
@@ -729,8 +773,8 @@ const ViewerTool: React.FC = () => {
             onDrop={(e) => { e.preventDefault(); setIsDraggingOver(false); if (e.dataTransfer.files) handleFiles(Array.from(e.dataTransfer.files)); }}
         >
             {isDraggingOver && (
-                <div className="absolute inset-0 z-50 bg-lime-500/20 backdrop-blur-sm border-2 border-dashed border-lime-400 flex flex-col items-center justify-center animate-in fade-in pointer-events-none rounded-xl">
-                    <Upload className="text-lime-400 w-16 h-16 mb-4 animate-bounce" />
+                <div className="absolute inset-0 z-50 bg-violet-500/20 backdrop-blur-sm border-2 border-dashed border-violet-400 flex flex-col items-center justify-center animate-in fade-in pointer-events-none rounded-xl">
+                    <Upload className="text-violet-400 w-16 h-16 mb-4 animate-bounce" />
                     <h3 className="text-2xl font-bold text-white drop-shadow-md">{t('drop_to_add')}</h3>
                 </div>
             )}
@@ -801,15 +845,23 @@ const ViewerTool: React.FC = () => {
                     {activeFile && (
                         <div className="flex items-center gap-1 sm:gap-2">
                             <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-1.5 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors" title={isFullScreen ? "Exit Full Screen" : "Full Screen"}>{isFullScreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-                            <div className="relative" ref={convertMenuRef}>
-                                <button onClick={() => setShowConvertMenu(!showConvertMenu)} disabled={isConverting || activeFile.type === 'large_csv'} className="p-1.5 sm:p-2 text-lime-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed" title="Convert File">{isConverting ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}<span className="text-xs font-bold hidden sm:block">Convert</span></button>
-                                {showConvertMenu && (
-                                    <div className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-[100] animate-in fade-in slide-in-from-top-1">
-                                        <div className="p-1 bg-gray-800">
-                                            {activeFile.type === 'spreadsheet' && (<button onClick={() => handleConvert('toggle')} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 rounded-lg transition-colors">To {activeFile.name.toLowerCase().endsWith('.csv') ? 'XLSX' : 'CSV'}</button>)}
-                                            {activeFile.type === 'image' && (<button onClick={() => handleConvert('pdf')} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 rounded-lg transition-colors">To PDF</button>)}
-                                            {activeFile.type === 'pdf' && (<><button onClick={() => handleConvert('image')} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 rounded-lg transition-colors">To Images</button><button onClick={() => handleConvert('docx')} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 rounded-lg transition-colors">To DOCX</button></>)}
-                                            {(activeFile.type === 'html' || activeFile.type === 'docx') && (<button onClick={() => handleConvert('pdf')} className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 rounded-lg transition-colors">To PDF</button>)}
+                            <div className="relative" ref={sendToMenuRef}>
+                                <button onClick={() => { setShowSendToMenu(!showSendToMenu); setShowConvertMenu(false); }} className="p-1.5 sm:p-2 text-violet-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors flex items-center gap-2" title="Open in another tool">
+                                  <Send size={16} /><span className="text-xs font-bold hidden sm:block">{lang === 'ru' ? 'Открыть в' : 'Open in'}</span>
+                                </button>
+                                {showSendToMenu && sendToOptions.length > 0 && (
+                                    <div className="absolute right-0 top-full mt-2 w-52 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-[100] animate-in fade-in slide-in-from-top-1">
+                                        <div className="p-1">
+                                            {sendToOptions.map(opt => (
+                                              <button
+                                                key={opt.id}
+                                                onClick={() => { setShowSendToMenu(false); navigateTo(opt.id as any, activeFile?.file); }}
+                                                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-between gap-2"
+                                              >
+                                                <span>{lang === 'ru' ? opt.labelRu : opt.label}</span>
+                                                <ArrowRight size={12} className="text-gray-500" />
+                                              </button>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -877,6 +929,23 @@ const ViewerTool: React.FC = () => {
 
                             {activeFile.type === 'pdf' && activeFile.url && <PdfRenderer url={activeFile.url} />}
                             {activeFile.type === 'image' && activeFile.url && (<div className="w-full h-full flex items-center justify-center p-2 sm:p-4 bg-gray-950 overflow-auto"><img src={activeFile.url} alt="Preview" className="max-w-full max-h-full object-contain rounded shadow-2xl" /></div>)}
+                            {activeFile.type === 'audio' && activeFile.url && (
+                                <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-gray-950 gap-6">
+                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-pink-500/20 to-purple-600/20 flex items-center justify-center border border-pink-500/20">
+                                        <Music size={40} className="text-pink-400" />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-sm font-bold text-gray-200">{activeFile.name}</p>
+                                        <p className="text-xs text-gray-500 mt-1">{activeFile.sizeFormatted}</p>
+                                    </div>
+                                    <audio controls className="w-full max-w-md" src={activeFile.url} />
+                                </div>
+                            )}
+                            {activeFile.type === 'video' && activeFile.url && (
+                                <div className="w-full h-full flex items-center justify-center p-2 bg-gray-950">
+                                    <video controls className="max-w-full max-h-full rounded shadow-2xl" src={activeFile.url} />
+                                </div>
+                            )}
                             {(activeFile.type === 'text' || activeFile.type === 'code') && (<div className="h-full overflow-auto custom-scrollbar p-3 sm:p-6"><pre className="font-mono text-[10px] sm:text-sm text-gray-300 whitespace-pre-wrap leading-relaxed max-w-5xl mx-auto">{activeFile.content}</pre></div>)}
                             {activeFile.type === 'html' && <HtmlRenderer content={activeFile.content} />}
                             {activeFile.type === 'docx' && <DocxRenderer file={activeFile.file} />}

@@ -5,7 +5,7 @@ import FileUploader from '../FileUploader';
 import { GitCompare, ArrowRightLeft, AlertCircle, Loader2, Play, CheckCircle2, XCircle, AlertTriangle, FileDiff, Download, Plus, X, Key, Search, ArrowRight, ArrowLeft } from 'lucide-react';
 import { FileData } from '../../types';
 import { useLanguage } from '../../App';
-import { parseCSVLine } from '../../utils/csvHelpers';
+import { parseCSVLine, parseCsvPreview, parseExcelPreview } from '../../utils/csvHelpers';
 
 // --- TYPES ---
 
@@ -392,10 +392,33 @@ const createWorkerBlob = () => {
 // --- COMPONENT ---
 
 const DiffTool: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, consumePendingFile } = useLanguage();
   const [fileOld, setFileOld] = useState<FileData | undefined>();
   const [fileNew, setFileNew] = useState<FileData | undefined>();
   
+  useEffect(() => {
+    const file = consumePendingFile();
+    if (file) {
+      (async () => {
+        const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
+        const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+        let previewData: Partial<FileData> = { headers: [], previewRows: [] };
+        try {
+          if (isExcel) previewData = await parseExcelPreview(file);
+          else if (isCsv) previewData = await parseCsvPreview(file);
+        } catch (e) { console.warn('Preview parsing failed', e); }
+        const fileData: FileData = {
+          id: Math.random().toString(36).substr(2, 9),
+          file,
+          headers: previewData.headers || [],
+          previewRows: previewData.previewRows || [],
+          sizeFormatted: previewData.sizeFormatted || '0 B'
+        };
+        setFileOld(fileData);
+      })();
+    }
+  }, []);
+
   // Multi-key support
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [isSwapping, setIsSwapping] = useState(false);

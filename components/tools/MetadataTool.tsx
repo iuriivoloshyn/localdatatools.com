@@ -38,7 +38,7 @@ interface ProcessedItem {
 }
 
 const MetadataTool: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, consumePendingFile } = useLanguage();
   const [queue, setQueue] = useState<ImageItem[]>([]);
   const [results, setResults] = useState<ProcessedItem[]>([]);
   const [viewMode, setViewMode] = useState<'input' | 'results'>('input');
@@ -60,6 +60,13 @@ const MetadataTool: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [zipSize, setZipSize] = useState<string>("");
+
+  useEffect(() => {
+    const file = consumePendingFile();
+    if (file) {
+      handleFiles([file]);
+    }
+  }, []);
 
   const currentList = viewMode === 'input' 
     ? queue 
