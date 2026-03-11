@@ -630,6 +630,7 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
               </div>
               
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <button onClick={() => handleToolClick('api-docs')} className={`text-xs font-medium transition-colors px-3 py-1.5 rounded-lg border ${activeTool === 'api-docs' ? 'text-indigo-400 border-indigo-500/30 bg-indigo-500/10' : 'text-gray-500 hover:text-white border-transparent hover:border-white/10 hover:bg-white/5'}`}>API</button>
                   <div className="relative h-9 w-9" ref={settingsRef}>
                     <button onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }} className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all shadow-sm p-0 bg-gray-900 border-white/[0.06] ${isSettingsOpen ? 'bg-gray-800 border-gray-700 text-white' : 'text-gray-400 hover:text-white hover:border-gray-600'}`}><SettingsIcon size={16} strokeWidth={2} /></button>
                     {isSettingsOpen && (
@@ -677,7 +678,13 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
             </div>
           </nav>
 
-          {!activeTool ? (
+          {activeTool === 'api-docs' ? (
+              <div key="api-docs" className={`flex-1 overflow-y-auto ${transitionClass}`}>
+                <Suspense fallback={<ToolLoader />}>
+                  <ApiDocs />
+                </Suspense>
+              </div>
+          ) : !activeTool ? (
               <div key="landing" className={`relative w-full flex-1 overflow-hidden flex flex-col items-center justify-center ${transitionClass}`}>
                    <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center">
                        <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] rounded-full transition-colors duration-1000" style={{ background: `radial-gradient(circle, ${theme.heroGlow} 0%, rgba(0,0,0,0) 70%)`, filter: 'blur(100px)', transform: 'translate3d(0,0,0)' }} />
@@ -736,7 +743,6 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
                      ))}
                   </nav>
                   <div className="mt-auto pt-8 pb-6 px-3 flex flex-col gap-6">
-                    <button onClick={() => handleToolClick('api-docs')} className={`text-xs font-medium transition-colors px-2 py-1 rounded ${activeTool === 'api-docs' ? 'text-indigo-400' : 'text-gray-500 hover:text-white'}`}>API</button>
                     <div className="flex flex-col items-center gap-0 group opacity-80 hover:opacity-100 transition-all duration-300">
                         <span className="text-[5.5px] font-bold text-gray-500 uppercase tracking-[0.25em] text-center mb-0.5">Created by</span>
                         <a href="https://ivlabs.xyz" target="_blank" rel="noopener noreferrer" className={`flex items-center gap-px font-mono text-sm bg-gray-900 border border-white/[0.06] px-4 py-2 rounded-xl transition-all ${theme.creatorBorder} ${theme.creatorShadow}`}><span className="text-gray-300 font-bold group-hover:text-white transition-colors">ivlabs</span><span className={`${theme.creatorAccent} font-bold`}>.xyz</span><span className={`w-1.5 h-3 rounded-[1px] ml-[1px] ${theme.creatorDot}`}></span></a>
@@ -758,7 +764,6 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
                           {visitedTools.has('compressor') && <div className={activeTool === 'compressor' ? 'block h-full' : 'hidden h-full'}><CompressorTool /></div>}
                           {visitedTools.has('generate-csv') && <div className={activeTool === 'generate-csv' ? 'block h-full' : 'hidden h-full'}><GenerateCsvTool /></div>}
                           {visitedTools.has('dashboard') && <div className={activeTool === 'dashboard' ? 'block h-full' : 'hidden h-full'}><InstantDashboardTool /></div>}
-                          {activeTool === 'api-docs' && <ApiDocs />}
                       </Suspense>
                   </div>
                 </main>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Copy, Check, ExternalLink, Lock, Zap, Shield, Code, Key, Loader2, MessageCircle } from 'lucide-react';
 
 const API_BASE = 'https://api.localdatatools.com';
@@ -405,7 +405,7 @@ const CsvAnonymizePage = ({ k }: { k: (s: string) => string }) => (
   <div className="space-y-12">
     <div className="space-y-4">
       <h1 className="text-3xl font-black text-white">Anonymize & Restore</h1>
-      <p className="text-gray-400">Replace sensitive values with random pseudonyms, then restore them later using the generated key file. Choose per column: map to a category (animals, cities, etc.), shuffle values, or keep as-is.</p>
+      <p className="text-gray-400">Replace sensitive values with NATO phonetic alphabet pseudonyms, then restore them later using the generated key file. Choose per column: map to pseudonyms, shuffle values, or keep as-is.</p>
     </div>
 
     {/* Anonymize */}
@@ -419,16 +419,14 @@ const CsvAnonymizePage = ({ k }: { k: (s: string) => string }) => (
       ]} />
       <div className="space-y-2">
         <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Config format</p>
-        <p className="text-gray-400 text-sm">Each column can have an <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">action</code>: <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">map</code>, <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">shuffle</code>, or <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">keep</code>.</p>
+        <p className="text-gray-400 text-sm">Each column can have an <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">action</code>: <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">map</code> (NATO phonetic alphabet + auto-scaling digits), <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">shuffle</code>, or <code className="text-cyan-400 bg-gray-900 px-1.5 py-0.5 rounded">keep</code>.</p>
         <CodeBlock>{`{
   "name": {
-    "action": "map",        // replace with pseudonyms
-    "category": "animals",  // colors, animals, fruits, cities, tech, nato
+    "action": "map",        // replace with NATO pseudonyms (e.g. Alpha42, Bravo07)
     "rename": "subject"     // optional: rename column header
   },
   "email": {
-    "action": "map",
-    "category": "tech"
+    "action": "map"
   },
   "age": {
     "action": "shuffle"     // randomly reorder values
@@ -441,7 +439,7 @@ const CsvAnonymizePage = ({ k }: { k: (s: string) => string }) => (
       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Example</p>
       <CodeBlock>{k(`curl -H "X-API-Key: your-api-key" \\
   -F "file=@users.csv" \\
-  -F 'config={"name":{"action":"map","category":"animals"},"email":{"action":"map","category":"tech"}}' \\
+  -F 'config={"name":{"action":"map","rename":"subject"},"email":{"action":"map"}}' \\
   ${API_BASE}/v1/csv/anonymize > anonymized.zip`)}</CodeBlock>
       <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Response</p>
       <p className="text-gray-400 text-sm">A ZIP file containing:</p>
@@ -457,11 +455,11 @@ const CsvAnonymizePage = ({ k }: { k: (s: string) => string }) => (
       </div>
       <CodeBlock>{`# anonymized_data.csv
 subject,email,age,city
-Tiger42857,Quantum697208,30,NYC
-Eagle31484,Nano144519,25,LA
+Alpha42,Foxtrot07,30,NYC
+Bravo18,Golf93,25,LA
 
 # deanonymization_key.json contains:
-# { "mappings": { "name": { "Alice": "Tiger42857", ... } }, "renames": { "name": "subject" } }`}</CodeBlock>
+# { "mappings": { "name": { "Alice": "Alpha42", ... } }, "renames": { "name": "subject" } }`}</CodeBlock>
     </div>
 
     {/* Deanonymize */}
@@ -631,7 +629,7 @@ open("photo.webp","wb").write(r.content)
 
 # Anonymize CSV
 import json
-config = json.dumps({"name": {"action": "map", "category": "animals"}})
+config = json.dumps({"name": {"action": "map"}, "email": {"action": "map"}})
 r = requests.post(f"{BASE}/v1/csv/anonymize", headers=headers,
     files={"file": open("users.csv","rb")}, data={"config": config})
 open("anonymized.zip","wb").write(r.content)
@@ -746,6 +744,7 @@ const ApiDocs: React.FC = () => {
 
   const [activePage, setActivePage] = useState(getPageFromUrl);
   const [generatedKey, setGeneratedKey] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const k = (code: string) => generatedKey ? code.replace(/your-api-key|your-key/g, generatedKey) : code;
 
@@ -753,7 +752,12 @@ const ApiDocs: React.FC = () => {
     const path = id === 'overview' ? '/api-docs' : `/api-docs/${id}`;
     window.history.pushState(null, '', path);
     setActivePage(id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll the docs container, not the window
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
@@ -781,10 +785,10 @@ const ApiDocs: React.FC = () => {
   const PageComponent = PAGES[activePage] || PAGES['overview'];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12 flex gap-8">
+    <div ref={scrollRef} className="max-w-7xl mx-auto px-4 py-12 flex gap-8 h-full overflow-y-auto">
       {/* Sidebar */}
       <nav className="hidden lg:block w-48 shrink-0">
-        <div className="sticky top-24 space-y-5">
+        <div className="sticky top-0 space-y-5">
           {NAV_SECTIONS.map(({ group, items }) => (
             <div key={group || 'ungrouped'}>
               {group && <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-1.5 px-3">{group}</p>}
