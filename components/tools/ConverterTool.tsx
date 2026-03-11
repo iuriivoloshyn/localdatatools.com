@@ -4,7 +4,7 @@ import ToolHeader from '../layout/ToolHeader';
 import FileUploader from '../FileUploader';
 import { RefreshCw, Upload, Download, FileSpreadsheet, FileText, ArrowRight, Loader2, AlertCircle, FileType, Image as ImageIcon, Trash2, X, Plus, Archive, ChevronDown, Music, Video } from 'lucide-react';
 import { useLanguage } from '../../App';
-import { detectAndConvert, ConversionResult } from '../../utils/converterHelpers';
+import { detectAndConvert, ConversionResult, resetFFmpeg } from '../../utils/converterHelpers';
 import { countFileLines } from '../../utils/csvHelpers';
 import JSZip from 'jszip';
 
@@ -30,11 +30,12 @@ const ConverterTool: React.FC = () => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
-  
+
   // Master switch state persistence (Images only for now)
   const [formatPreference, setFormatPreference] = useState<string>('');
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef(false);
 
   useEffect(() => {
     const file = consumePendingFile();
@@ -55,7 +56,7 @@ const ConverterTool: React.FC = () => {
 
   const isVideo = (name: string) => {
       const ext = name.split('.').pop()?.toLowerCase() || '';
-      return ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv'].includes(ext);
+      return ['mp4', 'mov', 'mkv', 'webm'].includes(ext);
   }
 
   // --- Master Switch Logic ---
@@ -94,17 +95,6 @@ const ConverterTool: React.FC = () => {
 
       const firstFmt = pendingAudio[0].targetFormat;
       const allSame = pendingAudio.every(item => item.targetFormat === firstFmt);
-
-      return allSame ? firstFmt : '';
-  }, [queue]);
-
-  // Video Master State
-  const displayMasterVideoFormat = useMemo(() => {
-      const videoItems = queue.filter(q => isVideo(q.file.name));
-      if (videoItems.length === 0) return '';
-
-      const firstFmt = videoItems[0].targetFormat;
-      const allSame = videoItems.every(item => item.targetFormat === firstFmt);
 
       return allSame ? firstFmt : '';
   }, [queue]);
@@ -151,11 +141,13 @@ const ConverterTool: React.FC = () => {
   };
 
   const processQueue = async () => {
+      abortRef.current = false;
       setIsProcessing(true);
       const itemsToProcess = queue.filter(q => q.status === 'idle' || q.status === 'error');
-      
+
       // Sequential Processing to avoid WASM memory crash with HEIC
       for (const item of itemsToProcess) {
+          if (abortRef.current) break;
           setQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'processing', error: undefined } : q));
           try {
               // Safety check for massive CSVs to prevent freezing
@@ -170,8 +162,10 @@ const ConverterTool: React.FC = () => {
               }
 
               const result = await detectAndConvert(item.file, item.targetFormat);
+              if (abortRef.current) break;
               setQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'completed', result } : q));
           } catch (e: any) {
+              if (abortRef.current) break;
               setQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'error', error: e.message } : q));
           }
           // Small delay between items to let GC catch up
@@ -244,6 +238,15 @@ const ConverterTool: React.FC = () => {
       }));
   };
 
+  // Video Master State
+  const displayMasterVideoFormat = useMemo(() => {
+      const videoItems = queue.filter(q => isVideo(q.file.name));
+      if (videoItems.length === 0) return '';
+      const firstFmt = videoItems[0].targetFormat;
+      const allSame = videoItems.every(item => item.targetFormat === firstFmt);
+      return allSame ? firstFmt : '';
+  }, [queue]);
+
   const handleMasterVideoChange = (format: string) => {
       if (!format) return;
       setQueue(prev => prev.map(item => {
@@ -261,7 +264,7 @@ const ConverterTool: React.FC = () => {
       if (['docx'].includes(ext || '')) return <FileText size={20} className="text-blue-400" />;
       if (['jpg', 'png', 'jpeg', 'webp', 'svg', 'heic'].includes(ext || '')) return <ImageIcon size={20} className="text-purple-400" />;
       if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'wma'].includes(ext || '')) return <Music size={20} className="text-yellow-400" />;
-      if (['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv'].includes(ext || '')) return <Video size={20} className="text-cyan-400" />;
+      if (['mp4', 'mov', 'mkv', 'webm'].includes(ext || '')) return <Video size={20} className="text-cyan-400" />;
       return <FileText size={20} className="text-gray-400" />;
   };
 
@@ -276,11 +279,11 @@ const ConverterTool: React.FC = () => {
           "Drag & Drop files (CSV, XLSX, PDF, DOCX, Images, Audio, Video)",
           "For Images, PDFs, Audio, & Video, select your desired output format",
           "Use the master switch in the queue to update all files at once",
-          "Video: browser conversion works for small files. For large videos, use the API"
+          "Video conversion uses WebCodecs (hardware-accelerated, works offline)"
         ]}
         icon={RefreshCw}
         colorClass="text-green-400"
-        onReset={() => { setQueue([]); setFormatPreference(''); }}
+        onReset={() => { abortRef.current = true; resetFFmpeg(); setIsProcessing(false); setQueue([]); setFormatPreference(''); }}
       />
 
       <div className="max-w-2xl mx-auto space-y-6">
@@ -290,7 +293,7 @@ const ConverterTool: React.FC = () => {
             disabled={isProcessing}
             theme="green"
             limitText="Spreadsheets, Docs, Images, Audio, Video, PDF"
-            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .wma, .mp4, .mov, .avi, .mkv, .webm, .flv"
+            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .wma, .mp4, .mov, .mkv, .webm"
         />
 
         {queue.length > 0 && (
@@ -371,9 +374,7 @@ const ConverterTool: React.FC = () => {
                                         <option value="mp4">To MP4</option>
                                         <option value="webm">To WebM</option>
                                         <option value="mov">To MOV</option>
-                                        <option value="avi">To AVI</option>
-                                        <option value="gif">To GIF</option>
-                                        <option value="mp3">Audio Only</option>
+                                        <option value="mkv">To MKV</option>
                                     </select>
                                     <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none group-hover:text-cyan-400 transition-colors" />
                                 </div>
@@ -383,8 +384,7 @@ const ConverterTool: React.FC = () => {
                     
                     <div className="flex gap-1 ml-auto">
                         <button 
-                            onClick={() => { setQueue([]); setFormatPreference(''); }} 
-                            disabled={isProcessing} 
+                            onClick={() => { abortRef.current = true; resetFFmpeg(); setIsProcessing(false); setQueue([]); setFormatPreference(''); }} 
                             className="p-1.5 bg-gray-800 hover:bg-gray-700 hover:text-red-400 rounded-lg text-gray-500 transition-colors disabled:opacity-50"
                             title="Clear All"
                         >
@@ -404,7 +404,7 @@ const ConverterTool: React.FC = () => {
                             ref={fileInputRef} 
                             className="hidden" 
                             multiple
-                            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .wma, .mp4, .mov, .avi, .mkv, .webm, .flv"
+                            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .wma, .mp4, .mov, .mkv, .webm"
                             onChange={(e) => {if (e.target.files) addToQueue(Array.from(e.target.files))}}
                             disabled={isProcessing}
                         />
@@ -466,7 +466,7 @@ const ConverterTool: React.FC = () => {
                                     {/* Video Options */}
                                     {isVideo(item.file.name) && item.status === 'idle' && (
                                         <div className="flex flex-wrap gap-2 mt-2">
-                                            {['mp4', 'webm', 'mov', 'avi', 'gif', 'mp3'].filter(fmt => fmt !== (item.file.name.split('.').pop()?.toLowerCase())).map(fmt => (
+                                            {['mp4', 'webm', 'mov', 'mkv'].filter(fmt => fmt !== (item.file.name.split('.').pop()?.toLowerCase())).map(fmt => (
                                                 <button
                                                     key={fmt}
                                                     onClick={() => setItemTarget(item.id, fmt)}
@@ -475,7 +475,7 @@ const ConverterTool: React.FC = () => {
                                                             ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300 font-bold shadow-sm shadow-cyan-900/20'
                                                             : 'border-gray-700 text-gray-500 hover:text-gray-300 hover:bg-gray-800'}`}
                                                 >
-                                                    {fmt === 'mp3' ? 'Audio' : fmt}
+                                                    {fmt}
                                                 </button>
                                             ))}
                                         </div>

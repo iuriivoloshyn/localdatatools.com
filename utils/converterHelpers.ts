@@ -511,71 +511,67 @@ export const convertAudio = async (file: File, targetFormat: string): Promise<Co
     };
 };
 
+/** Reset FFmpeg instance — call when aborting mid-conversion */
+export const resetFFmpeg = () => {
+    ffmpegInstance = null;
+    // Also cancel any active MediaBunny conversion
+    if (activeConversion) {
+        try { activeConversion.cancel(); } catch {}
+        activeConversion = null;
+    }
+};
+
+let activeConversion: any = null;
+
 export const convertVideo = async (file: File, targetFormat: string): Promise<ConversionResult> => {
-    console.log(`[convertVideo] Starting conversion of ${file.name} to ${targetFormat}`);
+    const {
+        Input, Output, Conversion, ALL_FORMATS,
+        BlobSource, BufferTarget,
+        Mp4OutputFormat, MovOutputFormat, WebMOutputFormat, MkvOutputFormat,
+    } = await import('mediabunny');
 
-    // Video conversion via FFmpeg.wasm is unreliable for large files.
-    // Use a timeout to fail gracefully instead of hanging forever.
-    const TIMEOUT_MS = targetFormat === 'gif' || targetFormat === 'mp3' ? 60_000 : 30_000;
-
-    const ffmpeg = await getFFmpeg();
-    const inputExt = file.name.split('.').pop()?.toLowerCase() || 'mp4';
-    const inputName = `input_${Date.now()}.${inputExt}`;
-    const outputName = `output_${Date.now()}.${targetFormat}`;
-
-    await ffmpeg.writeFile(inputName, await fetchFile(file));
-
-    let args: string[] = ['-y', '-i', inputName];
-
-    switch (targetFormat) {
-        case 'gif':
-            args.push('-vf', 'fps=10,scale=480:-1:flags=lanczos', '-loop', '0');
-            break;
-        case 'mp3':
-            args.push('-vn', '-c:a', 'libmp3lame', '-q:a', '2');
-            break;
-        default:
-            args.push('-c', 'copy');
-    }
-
-    args.push(outputName);
-
-    console.log(`[convertVideo] Executing ffmpeg with args:`, args);
-
-    // Race between conversion and timeout
-    const execPromise = ffmpeg.exec(args);
-    const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(
-            `Video conversion timed out. Browser-based video conversion has limitations — use the API (POST /v1/convert/video) for reliable results.`
-        )), TIMEOUT_MS)
-    );
-
-    try {
-        await Promise.race([execPromise, timeoutPromise]);
-    } catch (err) {
-        // Reset FFmpeg instance so it doesn't stay stuck for future conversions
-        ffmpegInstance = null;
-        throw err;
-    }
-
-    const data = await ffmpeg.readFile(outputName);
-    const mimeMap: Record<string, string> = {
-        mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
-        avi: 'video/x-msvideo', mkv: 'video/x-matroska', gif: 'image/gif',
-        mp3: 'audio/mpeg'
+    const formatMap: Record<string, () => any> = {
+        mp4: () => new Mp4OutputFormat(),
+        mov: () => new MovOutputFormat(),
+        webm: () => new WebMOutputFormat(),
+        mkv: () => new MkvOutputFormat(),
     };
-    const blob = new Blob([data], { type: mimeMap[targetFormat] || `video/${targetFormat}` });
 
+    if (!formatMap[targetFormat]) {
+        throw new Error(`Video format "${targetFormat}" is not supported for browser conversion. Supported: MP4, MOV, WebM, MKV.`);
+    }
+
+    const input = new Input({
+        formats: ALL_FORMATS,
+        source: new BlobSource(file),
+    });
+    const output = new Output({
+        format: formatMap[targetFormat](),
+        target: new BufferTarget(),
+    });
+
+    const conversion = await Conversion.init({ input, output });
+    activeConversion = conversion;
+
+    conversion.onProgress = (progress: number) => {
+        console.log(`[convertVideo] ${Math.round(progress * 100)}%`);
+    };
+
+    await conversion.execute();
+    activeConversion = null;
+
+    const buffer: ArrayBuffer = (output.target as any).buffer;
+    const mimeMap: Record<string, string> = {
+        mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska',
+    };
+    const blob = new Blob([buffer], { type: mimeMap[targetFormat] || `video/${targetFormat}` });
     const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-
-    await ffmpeg.deleteFile(inputName);
-    await ffmpeg.deleteFile(outputName);
 
     return {
         name: `${baseName}.${targetFormat}`,
-        blob: blob,
+        blob,
         url: URL.createObjectURL(blob),
-        type: targetFormat
+        type: targetFormat,
     };
 };
 
@@ -646,17 +642,12 @@ export const detectAndConvert = async (file: File, targetFormat?: string): Promi
         return convertAudio(file, target);
     }
 
-    // Video
-    const videoExts = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv'];
+    // Video (via MediaBunny / WebCodecs API)
+    const videoExts = ['mp4', 'mov', 'mkv', 'webm'];
     if (videoExts.includes(ext || '')) {
         let target = targetFormat || 'mp4';
         if (target === ext) {
-            return {
-                name: file.name,
-                blob: file,
-                url: URL.createObjectURL(file),
-                type: target
-            };
+            return { name: file.name, blob: file, url: URL.createObjectURL(file), type: target };
         }
         return convertVideo(file, target);
     }
