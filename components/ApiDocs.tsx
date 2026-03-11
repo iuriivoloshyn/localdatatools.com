@@ -819,7 +819,7 @@ const ApiDocs: React.FC = () => {
                   <button
                     key={id}
                     onClick={() => navigate(id)}
-                    className={`block w-full text-left px-3 py-1.5 rounded-lg text-[13px] transition-all ${activePage === id ? 'text-cyan-400 bg-cyan-500/5 font-medium' : 'text-gray-500 hover:text-gray-300'}`}
+                    className={`block w-full text-left px-3 py-1.5 rounded-lg text-[13px] transition-all ${activePage === id ? 'text-indigo-400 bg-indigo-500/10 font-medium border border-indigo-500/20' : 'text-gray-500 hover:text-gray-300'}`}
                   >
                     {label}
                   </button>
