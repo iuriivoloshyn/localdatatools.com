@@ -439,7 +439,7 @@ const AiChatTool: React.FC = () => {
                         <button 
                         onClick={handleSend}
                         disabled={isSending || (!input.trim() && pendingImages.length === 0)}
-                        className="absolute right-2 bottom-2 p-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-lg transition-all disabled:opacity-20 disabled:grayscale"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-lg transition-all disabled:opacity-20 disabled:grayscale"
                         >
                         <Send size={18} fill="currentColor" />
                         </button>
