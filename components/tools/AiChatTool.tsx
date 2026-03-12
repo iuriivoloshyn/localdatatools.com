@@ -422,8 +422,7 @@ const AiChatTool: React.FC = () => {
                         </button>
                     </div>
 
-                    <div className="flex-1 relative">
-                        <textarea
+                    <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -433,17 +432,16 @@ const AiChatTool: React.FC = () => {
                             }
                         }}
                         placeholder="Ask Gemma anything..."
-                        className="w-full bg-gray-900 border border-white/10 rounded-2xl px-5 py-3 pr-12 text-sm text-white placeholder-gray-600 focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500/50 outline-none resize-none custom-scrollbar min-h-[48px] max-h-32"
+                        className="flex-1 bg-gray-900 border border-white/10 rounded-2xl px-5 py-3 text-sm text-white placeholder-gray-600 focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500/50 outline-none resize-none custom-scrollbar min-h-[48px] max-h-32"
                         rows={1}
                         />
-                        <button 
+                    <button
                         onClick={handleSend}
                         disabled={isSending || (!input.trim() && pendingImages.length === 0)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-lg transition-all disabled:opacity-20 disabled:grayscale"
+                        className="p-3 bg-rose-600 hover:bg-rose-500 text-white rounded-2xl shadow-lg transition-all disabled:opacity-20 disabled:grayscale flex-shrink-0"
                         >
                         <Send size={18} fill="currentColor" />
-                        </button>
-                    </div>
+                    </button>
                     </div>
                 </div>
             </div>
