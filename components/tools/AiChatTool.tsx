@@ -397,8 +397,8 @@ const AiChatTool: React.FC = () => {
                     </div>
                     )}
 
-                    <div className="flex items-end gap-3 max-w-5xl mx-auto">
-                    <div className="flex gap-1 mb-1">
+                    <div className="flex items-center gap-3 max-w-5xl mx-auto">
+                    <div className="flex gap-1">
                         <button 
                         onClick={() => fileInputRef.current?.click()}
                         className="p-3 text-gray-500 hover:text-rose-400 transition-colors bg-gray-800 rounded-2xl border border-white/5"
