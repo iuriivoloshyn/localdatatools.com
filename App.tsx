@@ -313,7 +313,7 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
   const [snowSpeed, setSnowSpeed] = useState(1.0);
   const [snowDensity, setSnowDensity] = useState(50);
   const [snowLayers, setSnowLayers] = useState<SnowfallLayerConfig>({ background: true, midground: true, foreground: false });
-  const [isSnowEnabled, setIsSnowEnabled] = useState(true);
+  const [isSnowEnabled, setIsSnowEnabled] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
   const [isZenControlsVisible, setIsZenControlsVisible] = useState(true);
   
@@ -402,7 +402,7 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
     setSnowSpeed(1.0);
     setSnowDensity(50);
     setSnowLayers({ background: true, midground: true, foreground: false });
-    setIsSnowEnabled(true);
+    setIsSnowEnabled(false);
   };
 
   const handleOfflineToggle = async (enabled: boolean) => {
