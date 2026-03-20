@@ -1,5 +1,6 @@
 import { read, utils, write } from 'xlsx';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import * as docx from 'docx';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
@@ -310,29 +311,63 @@ export const convertDocxToPdf = async (file: File): Promise<ConversionResult> =>
 
     await new Promise(resolve => setTimeout(resolve, 100));
 
+    // Use html2canvas to rasterize — this preserves Cyrillic and all Unicode text
+    // because it uses the browser's native font rendering instead of jsPDF's limited built-in fonts.
+    const scale = 2; // 2x for sharp text
+    const canvas = await html2canvas(container, {
+        scale,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        width: 612,
+        windowWidth: 612,
+    });
+
+    document.body.removeChild(container);
+
+    const pageWidthPt = 612;
+    const pageHeightPt = 792;
+    const imgWidthPx = canvas.width;
+    const imgHeightPx = canvas.height;
+
+    // Convert canvas pixels back to points (accounting for scale)
+    const contentHeightPt = (imgHeightPx / scale);
+    const totalPages = Math.max(1, Math.ceil(contentHeightPt / pageHeightPt));
+
     const pdf = new jsPDF({
         orientation: 'p',
         unit: 'pt',
-        format: 'letter', 
-        compress: true
+        format: 'letter',
+        compress: true,
     });
-    
-    await pdf.html(container, {
-        callback: (doc) => {
-            // Success
-        },
-        x: 0,
-        y: 0,
-        width: 612, 
-        windowWidth: 612,
-        autoPaging: 'text',
-        margin: 0
-    });
+
+    for (let page = 0; page < totalPages; page++) {
+        if (page > 0) pdf.addPage();
+
+        // Slice the canvas for this page
+        const sliceHeightPx = Math.min(pageHeightPt * scale, imgHeightPx - page * pageHeightPt * scale);
+        if (sliceHeightPx <= 0) break;
+
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = imgWidthPx;
+        pageCanvas.height = sliceHeightPx;
+        const ctx = pageCanvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(
+            canvas,
+            0, page * pageHeightPt * scale,
+            imgWidthPx, sliceHeightPx,
+            0, 0,
+            imgWidthPx, sliceHeightPx
+        );
+
+        const imgData = pageCanvas.toDataURL('image/jpeg', 0.95);
+        const sliceHeightPt = sliceHeightPx / scale;
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidthPt, sliceHeightPt);
+    }
 
     const blob = pdf.output('blob');
     const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-    
-    document.body.removeChild(container);
 
     return {
       name: `${baseName}.pdf`,
