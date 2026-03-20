@@ -532,13 +532,18 @@ curl -H "X-API-Key: your-api-key" \\
 const ConvertDocumentPage = ({ k }: { k: (s: string) => string }) => (
   <div className="space-y-5">
     <h1 className="text-3xl font-black text-white">Document Conversion</h1>
-    <p className="text-gray-400">Extract text from PDF files. Output as plain text, DOCX, or structured JSON.</p>
+    <p className="text-gray-400">Convert between PDF and DOCX. Extract text from PDFs as plain text, DOCX, or JSON. Convert DOCX to PDF with full Cyrillic, image, and formatting support.</p>
     <Endpoint method="POST" path="/v1/convert/document" responseType="file" />
     <ParamTable params={[
-      { name: 'file', type: 'file', required: true, desc: 'PDF file to convert' },
-      { name: 'format', type: 'string', desc: 'txt (default), docx, or json' },
+      { name: 'file', type: 'file', required: true, desc: 'PDF or DOCX file' },
+      { name: 'format', type: 'string', desc: 'For PDF input: txt (default), docx, or json. For DOCX input: pdf (default).' },
     ]} />
-    <CodeBlock>{k(`# PDF → plain text
+    <CodeBlock>{k(`# DOCX → PDF
+curl -H "X-API-Key: your-api-key" \\
+  -F "file=@document.docx" \\
+  ${API_BASE}/v1/convert/document > document.pdf
+
+# PDF → plain text
 curl -H "X-API-Key: your-api-key" \\
   -F "file=@document.pdf" \\
   ${API_BASE}/v1/convert/document > document.txt
@@ -552,7 +557,7 @@ curl -H "X-API-Key: your-api-key" \\
 curl -H "X-API-Key: your-api-key" \\
   -F "file=@document.pdf" -F "format=json" \\
   ${API_BASE}/v1/convert/document`)}</CodeBlock>
-    <p className="text-gray-500 text-xs">Response headers: <code className="text-cyan-400">X-Pages</code></p>
+    <p className="text-gray-500 text-xs">DOCX → PDF uses LibreOffice for accurate rendering. Response headers: <code className="text-cyan-400">X-Pages</code> (PDF input), <code className="text-cyan-400">X-Original-Size</code>, <code className="text-cyan-400">X-Output-Size</code> (DOCX input)</p>
   </div>
 );
 
@@ -718,8 +723,8 @@ const PAGE_SEO: Record<string, { title: string; description: string }> = {
     description: 'Convert images between PNG, JPEG, WebP, AVIF, TIFF, and GIF via API. Resize, set quality, and optimize images server-side.',
   },
   'convert-document': {
-    title: 'Document Conversion API — PDF to Text, DOCX, JSON',
-    description: 'Extract text from PDFs, convert PDF to DOCX or JSON via API. Server-side document processing with page count metadata.',
+    title: 'Document Conversion API — DOCX to PDF, PDF to Text/DOCX/JSON',
+    description: 'Convert DOCX to PDF and extract text from PDFs via API. DOCX to PDF with full Cyrillic and image support. PDF to plain text, DOCX, or structured JSON.',
   },
   'convert-audio': {
     title: 'Audio Conversion API — MP3, WAV, FLAC, AAC, OGG',
