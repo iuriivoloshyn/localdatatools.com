@@ -420,7 +420,7 @@ const ConverterTool: React.FC = () => {
                 </div>
                 <div className="divide-y divide-gray-800 max-h-[400px] overflow-y-auto custom-scrollbar">
                     {queue.map((item) => (
-                        <div key={item.id} className="p-4 flex flex-col gap-2 hover:bg-gray-800/30 transition-colors group relative">
+                        <div key={item.id} className="p-4 flex flex-col gap-2 hover:bg-gray-800/30 transition-colors group relative min-h-[60px]">
                             <div className="flex items-center gap-4">
                                 <div className="shrink-0">{getIconForFile(item.file.name)}</div>
                                 <div className="flex-1 min-w-0">
@@ -491,19 +491,24 @@ const ConverterTool: React.FC = () => {
                                 </div>
                                 
                                 <div className="shrink-0 flex items-center gap-4">
-                                    {item.status === 'idle' && (
-                                        <span className="text-xs text-gray-500 uppercase font-bold">{item.targetFormat ? `${item.targetFormat === 'image' ? 'Images' : item.targetFormat}` : 'Ready'}</span>
+                                    {item.status === 'idle' && item.targetFormat && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-gray-500 uppercase font-bold">{item.targetFormat === 'image' ? 'Images' : item.targetFormat}</span>
+                                            <ArrowRight size={12} className="text-gray-600" />
+                                        </div>
+                                    )}
+                                    {item.status === 'idle' && !item.targetFormat && (
+                                        <span className="text-xs text-gray-500 uppercase font-bold">Ready</span>
                                     )}
                                     {item.status === 'processing' && (
                                         <div className="flex items-center gap-2 text-green-400">
                                             <Loader2 size={16} className="animate-spin" />
-                                            <span className="text-xs">Converting...</span>
+                                            <span className="text-xs font-bold">{item.targetFormat ? `→ ${item.targetFormat === 'image' ? 'Images' : item.targetFormat.toUpperCase()}` : 'Converting...'}</span>
                                         </div>
                                     )}
                                     {item.status === 'completed' && item.result && (
                                         <div className="flex items-center gap-3">
-                                            <span className="text-xs text-gray-500 uppercase font-bold">{item.result.type === 'jpeg' ? 'JPG' : item.result.type}</span>
-                                            <ArrowRight size={14} className="text-gray-600" />
+                                            <span className="text-xs text-green-400 uppercase font-bold">{item.result.type === 'jpeg' ? 'JPG' : item.result.type}</span>
                                             <a 
                                                 href={item.result.url} 
                                                 download={item.result.name}
