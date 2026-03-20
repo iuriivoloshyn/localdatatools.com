@@ -566,7 +566,7 @@ const ConverterTool: React.FC = () => {
                         className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-green-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
                     >
                         {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-                        <span>{queue.filter(q => q.status === 'idle' || q.status === 'error').length === 1 ? 'Convert' : 'Convert All'}</span>
+                        <span>{queue.filter(q => q.status === 'idle' || q.status === 'error').length > 1 ? 'Convert All' : 'Convert'}</span>
                     </button>
                 </div>
             </div>

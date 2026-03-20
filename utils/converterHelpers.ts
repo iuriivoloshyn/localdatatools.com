@@ -271,101 +271,143 @@ export const convertDocxToPdf = async (file: File): Promise<ConversionResult> =>
     const container = document.createElement('div');
     container.innerHTML = html;
     
-    // Strict Typographic CSS for PDF matching the Viewer
-    container.style.cssText = `
-        width: 612pt; 
-        padding: 72pt; 
-        background: white;
-        color: #000;
-        font-family: 'Times New Roman', serif;
-        font-size: 12pt;
-        line-height: 1.2;
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: -1000;
-        box-sizing: border-box;
-        overflow-wrap: break-word;
-    `;
-    
-    const styles = document.createElement('style');
-    styles.innerHTML = `
-        h1.docx-title { font-size: 28pt; font-weight: 700; text-align: center; margin-bottom: 12pt; margin-top: 0; line-height: 1.1; color: #000; }
-        p.docx-subtitle { text-align: center; font-size: 14pt; margin-bottom: 18pt; font-style: italic; color: #333; }
-        h2.docx-h1 { font-size: 18pt; font-weight: 700; margin-top: 18pt; margin-bottom: 6pt; color: #000; border-bottom: 1px solid #000; padding-bottom: 2pt; }
-        h3.docx-h2 { font-size: 14pt; font-weight: 700; margin-top: 12pt; margin-bottom: 4pt; color: #000; }
-        h4.docx-h3 { font-size: 12pt; font-weight: 700; margin-top: 8pt; margin-bottom: 2pt; color: #222; }
-        p { margin-bottom: 6pt; text-align: justify; }
-        p:empty { min-height: 12pt; margin-bottom: 0; }
-        ul, ol { list-style-type: disc; padding-left: 24pt; margin-bottom: 8pt; }
-        li { margin-bottom: 2pt; display: list-item; }
+    // Use px throughout so html2canvas width matches exactly.
+    // Letter page: 8.5in x 11in at 96dpi = 816px x 1056px. Margins ~96px (1in).
+    const PAGE_W = 816;
+    const PAGE_H = 1056;
+    const MARGIN = 96;
+
+    // Render inside a hidden iframe to avoid any layout shift in the main page
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + PAGE_W + 'px;height:' + PAGE_H + 'px;border:none;visibility:visible;';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow!.document;
+    iframeDoc.open();
+    iframeDoc.write(`<!DOCTYPE html><html><head>
+        <link href="https://fonts.googleapis.com/css2?family=Times+New+Roman&display=swap" rel="stylesheet">
+        <style>
+        body { margin: 0; padding: 0; background: white; }
+        #pdf-container {
+            width: ${PAGE_W}px;
+            padding: ${MARGIN}px;
+            background: white;
+            color: #000;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 16px;
+            line-height: 1.2;
+            box-sizing: border-box;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+        h1.docx-title { font-size: 37px; font-weight: 700; text-align: center; margin-bottom: 16px; margin-top: 0; line-height: 1.1; color: #000; }
+        p.docx-subtitle { text-align: center; font-size: 19px; margin-bottom: 24px; font-style: italic; color: #333; }
+        h2.docx-h1 { font-size: 24px; font-weight: 700; margin-top: 24px; margin-bottom: 8px; color: #000; border-bottom: 1px solid #000; padding-bottom: 3px; }
+        h3.docx-h2 { font-size: 19px; font-weight: 700; margin-top: 16px; margin-bottom: 5px; color: #000; }
+        h4.docx-h3 { font-size: 16px; font-weight: 700; margin-top: 11px; margin-bottom: 3px; color: #222; }
+        p { margin-bottom: 8px; text-align: justify; }
+        p:empty { min-height: 16px; margin-bottom: 0; }
+        ul, ol { list-style-type: disc; padding-left: 32px; margin-bottom: 11px; }
+        li { margin-bottom: 3px; display: list-item; }
         strong, b { font-weight: 700 !important; color: #000; }
-        table { width: 100%; border-collapse: collapse; margin: 8pt 0; }
-        td, th { border: 1px solid #000; padding: 4pt; vertical-align: top; }
+        table { width: 100%; border-collapse: collapse; margin: 11px 0; }
+        td, th { border: 1px solid #000; padding: 5px; vertical-align: top; }
         u { text-decoration: underline; }
         a { color: #0563c1; text-decoration: underline; font-weight: 700; }
-        img { max-width: 100%; height: auto; display: block; margin: 8pt 0; page-break-inside: avoid; }
-        p:has(img) { overflow: visible; clear: both; }
-    `;
-    container.appendChild(styles);
+        img { max-width: 100%; height: auto; display: block; margin: 8px 0; }
+        </style></head><body><div id="pdf-container">${html}</div></body></html>`);
+    iframeDoc.close();
 
-    document.body.appendChild(container);
+    await new Promise(resolve => setTimeout(resolve, 200));
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    const pdfContainer = iframeDoc.getElementById('pdf-container')!;
 
-    // Use html2canvas to rasterize — this preserves Cyrillic and all Unicode text
-    // because it uses the browser's native font rendering instead of jsPDF's limited built-in fonts.
-    const scale = 2; // 2x for sharp text
-    const canvas = await html2canvas(container, {
+    // Smart page-break: push elements that would be split across page boundaries.
+    // Re-scan after each adjustment since pushing one element shifts everything below it.
+    // Google Docs-style page breaks: enforce top and bottom margins on every page.
+    // Each page's usable content area is [pageStart + MARGIN, pageStart + PAGE_H - MARGIN].
+    // Any element touching a forbidden zone (top/bottom margins) gets pushed to the next usable area.
+    const usableStart = (page: number) => page * PAGE_H + MARGIN;
+    const usableEnd = (page: number) => (page + 1) * PAGE_H - MARGIN;
+
+    const avoidBreak = () => {
+        const blocks = pdfContainer.querySelectorAll('img, p, h1, h2, h3, h4, h5, li, table, tr');
+        const top0 = pdfContainer.getBoundingClientRect().top;
+        let adjusted = false;
+        for (const el of Array.from(blocks)) {
+            if ((el as HTMLElement).dataset.pbDone) continue;
+            const rect = el.getBoundingClientRect();
+            const elTop = rect.top - top0;
+            const elBottom = rect.bottom - top0;
+            const elH = rect.height;
+            if (elH < 1) continue;
+
+            const pageOfTop = Math.floor(elTop / PAGE_H);
+            const endOfUsable = usableEnd(pageOfTop);
+            const startOfNextUsable = usableStart(pageOfTop + 1);
+
+            // Check if element extends past the usable area of its page
+            if (elBottom > endOfUsable && elTop > MARGIN) {
+                // If element fits on a single page, push to next page's usable area
+                if (elH <= PAGE_H - 2 * MARGIN) {
+                    const push = startOfNextUsable - elTop;
+                    if (push > 0) {
+                        (el as HTMLElement).style.marginTop =
+                            `${push + parseFloat((el as HTMLElement).style.marginTop || '0')}px`;
+                        (el as HTMLElement).dataset.pbDone = '1';
+                        adjusted = true;
+                    }
+                }
+                // Elements taller than usable area are left as-is (unavoidable split)
+            }
+        }
+        return adjusted;
+    };
+    // Run passes until stable (max 8) to handle cascading shifts
+    for (let i = 0; i < 8 && avoidBreak(); i++) {
+        await new Promise(r => setTimeout(r, 30));
+    }
+
+    // html2canvas rasterizes using the browser's native font rendering,
+    // preserving Cyrillic and all Unicode text that jsPDF can't handle.
+    const scale = 2;
+    const canvas = await html2canvas(pdfContainer, {
         scale,
         useCORS: true,
         backgroundColor: '#ffffff',
-        width: 612,
-        windowWidth: 612,
+        width: PAGE_W,
+        windowWidth: PAGE_W,
     });
 
-    document.body.removeChild(container);
+    document.body.removeChild(iframe);
 
-    const pageWidthPt = 612;
-    const pageHeightPt = 792;
-    const imgWidthPx = canvas.width;
-    const imgHeightPx = canvas.height;
+    const imgWidthPx = canvas.width;   // PAGE_W * scale
+    const imgHeightPx = canvas.height;  // total content height * scale
+    const pageSlicePx = PAGE_H * scale; // one page height in canvas pixels
 
-    // Convert canvas pixels back to points (accounting for scale)
-    const contentHeightPt = (imgHeightPx / scale);
-    const totalPages = Math.max(1, Math.ceil(contentHeightPt / pageHeightPt));
+    const totalPages = Math.max(1, Math.ceil(imgHeightPx / pageSlicePx));
 
-    const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'pt',
-        format: 'letter',
-        compress: true,
-    });
+    // PDF in pt: letter = 612 x 792
+    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'letter', compress: true });
 
     for (let page = 0; page < totalPages; page++) {
         if (page > 0) pdf.addPage();
 
-        // Slice the canvas for this page
-        const sliceHeightPx = Math.min(pageHeightPt * scale, imgHeightPx - page * pageHeightPt * scale);
-        if (sliceHeightPx <= 0) break;
-
         const pageCanvas = document.createElement('canvas');
         pageCanvas.width = imgWidthPx;
-        pageCanvas.height = sliceHeightPx;
+        pageCanvas.height = pageSlicePx;
         const ctx = pageCanvas.getContext('2d')!;
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-        ctx.drawImage(
-            canvas,
-            0, page * pageHeightPt * scale,
-            imgWidthPx, sliceHeightPx,
-            0, 0,
-            imgWidthPx, sliceHeightPx
-        );
+
+        const srcY = page * pageSlicePx;
+        const srcH = Math.min(pageSlicePx, imgHeightPx - srcY);
+        if (srcH <= 0) break;
+
+        ctx.drawImage(canvas, 0, srcY, imgWidthPx, srcH, 0, 0, imgWidthPx, srcH);
 
         const imgData = pageCanvas.toDataURL('image/jpeg', 0.95);
-        const sliceHeightPt = sliceHeightPx / scale;
-        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidthPt, sliceHeightPt);
+        pdf.addImage(imgData, 'JPEG', 0, 0, 612, 792);
     }
 
     const blob = pdf.output('blob');
