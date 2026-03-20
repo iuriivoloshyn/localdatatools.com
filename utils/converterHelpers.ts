@@ -304,6 +304,7 @@ export const convertDocxToPdf = async (file: File): Promise<ConversionResult> =>
         td, th { border: 1px solid #000; padding: 4pt; vertical-align: top; }
         u { text-decoration: underline; }
         a { color: #0563c1; text-decoration: underline; font-weight: 700; }
+        img { max-width: 100%; height: auto; display: block; margin: 8pt 0; }
     `;
     container.appendChild(styles);
 
