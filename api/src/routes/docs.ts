@@ -265,8 +265,8 @@ const OPENAPI_SPEC = {
     '/v1/convert/document': {
       post: {
         tags: ['File Conversion'],
-        summary: 'Convert PDF to text, DOCX, or JSON',
-        description: 'Extract text from PDF files. Output as plain text, DOCX document, or structured JSON with metadata.',
+        summary: 'Convert documents (PDF or DOCX)',
+        description: 'PDF input: extract text as plain text, DOCX, or structured JSON. DOCX input: convert to PDF using LibreOffice (preserves Cyrillic, images, and formatting).',
         requestBody: {
           required: true,
           content: {
@@ -274,8 +274,8 @@ const OPENAPI_SPEC = {
               schema: {
                 type: 'object',
                 properties: {
-                  file: { type: 'string', format: 'binary', description: 'PDF file' },
-                  format: { type: 'string', enum: ['txt', 'docx', 'json'], default: 'txt', description: 'Output format' },
+                  file: { type: 'string', format: 'binary', description: 'PDF or DOCX file' },
+                  format: { type: 'string', enum: ['txt', 'docx', 'json', 'pdf'], description: 'Output format. For PDF input: txt (default), docx, json. For DOCX input: pdf (default).' },
                 },
                 required: ['file'],
               },
@@ -285,6 +285,7 @@ const OPENAPI_SPEC = {
         responses: {
           '200': { description: 'Converted document' },
           '400': { description: 'Bad request' },
+          '500': { description: 'Conversion failed' },
         },
       },
     },

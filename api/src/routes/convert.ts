@@ -183,6 +183,47 @@ convertRoutes.post('/document', async (c) => {
   const buffer = Buffer.from(await file.arrayBuffer());
   const baseName = file.name.replace(/\.[^.]+$/, '');
 
+  // DOCX → PDF via LibreOffice headless
+  if (name.endsWith('.docx')) {
+    if (!format) format = 'pdf';
+    if (format !== 'pdf') {
+      return c.json({ error: 'Supported output formats for DOCX: pdf' }, 400);
+    }
+
+    const id = randomBytes(8).toString('hex');
+    const inputPath = join(tmpdir(), `ldt-doc-${id}.docx`);
+    const outputDir = tmpdir();
+
+    try {
+      writeFileSync(inputPath, buffer);
+      await execFileAsync('soffice', [
+        '--headless', '--convert-to', 'pdf', '--outdir', outputDir, inputPath
+      ], { timeout: 120_000 });
+
+      const outputPath = join(outputDir, `ldt-doc-${id}.pdf`);
+      const output = readFileSync(outputPath);
+      unlinkSync(outputPath);
+
+      if (isLargeDoc) {
+        const { jobId, fileKey } = await storeEncrypted(output, { contentType: 'application/pdf', fileName: `${baseName}.pdf` });
+        return c.json({ jobId, fileKey, downloadUrl: `/v1/jobs/${jobId}/download?key=${fileKey}`, expiresIn: '24 hours', size: output.length, note: 'File is encrypted at rest. The fileKey is required to decrypt — it is not stored on our servers.' });
+      }
+
+      return new Response(new Uint8Array(output), {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${baseName}.pdf"`,
+          'X-Original-Size': String(buffer.length),
+          'X-Output-Size': String(output.length),
+        },
+      });
+    } catch (err: any) {
+      return c.json({ error: `DOCX to PDF conversion failed: ${err.message || 'Unknown error'}` }, 500);
+    } finally {
+      if (existsSync(inputPath)) unlinkSync(inputPath);
+    }
+  }
+
   if (name.endsWith('.pdf')) {
     if (!format) format = 'txt';
 
@@ -254,7 +295,7 @@ convertRoutes.post('/document', async (c) => {
     return c.json({ error: 'Supported output formats for PDF: txt, docx, json' }, 400);
   }
 
-  return c.json({ error: 'Supported input formats: .pdf. Upload a PDF file.' }, 400);
+  return c.json({ error: 'Supported input formats: .pdf, .docx' }, 400);
 });
 
 // POST /v1/convert/audio - Convert between audio formats using FFmpeg
