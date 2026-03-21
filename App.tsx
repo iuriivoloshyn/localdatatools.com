@@ -504,15 +504,17 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
     const slug = tool === 'api-docs' ? 'api-docs' : tool ? (TOOL_TO_SLUG[tool] || tool) : '';
     const newPath = slug ? `/${slug}` : '/';
     window.history.pushState(null, '', newPath);
-    // Update title
+    // Update title & canonical
     if (!tool) {
-      document.title = 'Local Data Tools';
+      document.title = 'Local Data Tools — Free Offline File Converter, CSV Merger, OCR & Data Toolkit';
     } else if (tool === 'api-docs') {
       document.title = 'API Docs — Local Data Tools';
     } else {
       const toolConfig = TOOLS_LIST.find(t => t.id === tool);
       document.title = toolConfig ? `${toolConfig.label} — Local Data Tools` : 'Local Data Tools';
     }
+    const canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
+    if (canonical) canonical.href = `https://localdatatools.com${newPath}`;
   };
 
   // Browser back/forward navigation
