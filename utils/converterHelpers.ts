@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import * as docx from 'docx';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
+import { marked } from 'marked';
 // We import types but avoid using the npm import for execution to prefer the CDN global
 // which handles WASM pathing better.
 import heic2any from 'heic2any'; 
@@ -707,6 +708,146 @@ export const convertVideo = async (file: File, targetFormat: string): Promise<Co
     };
 };
 
+export const convertMdToPdf = async (file: File): Promise<ConversionResult> => {
+    try {
+        const text = await file.text();
+        const html = await marked(text);
+
+        const PAGE_W = 816;
+        const PAGE_H = 1056;
+        const MARGIN = 96;
+
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${PAGE_W}px;height:${PAGE_H}px;border:none;visibility:visible;`;
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow!.document;
+        iframeDoc.open();
+        iframeDoc.write(`<!DOCTYPE html><html><head>
+            <style>
+            body { margin: 0; padding: 0; background: white; }
+            #pdf-container {
+                width: ${PAGE_W}px;
+                padding: ${MARGIN}px;
+                background: white;
+                color: #000;
+                font-family: Georgia, 'Times New Roman', serif;
+                font-size: 16px;
+                line-height: 1.6;
+                box-sizing: border-box;
+                overflow-wrap: break-word;
+                word-break: break-word;
+            }
+            h1 { font-size: 32px; font-weight: 700; margin: 0 0 16px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+            h2 { font-size: 24px; font-weight: 700; margin: 24px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+            h3 { font-size: 19px; font-weight: 700; margin: 16px 0 5px; }
+            h4, h5, h6 { font-size: 16px; font-weight: 700; margin: 12px 0 4px; }
+            p { margin: 0 0 12px; text-align: justify; }
+            ul, ol { padding-left: 32px; margin: 0 0 12px; }
+            li { margin-bottom: 4px; }
+            blockquote { border-left: 4px solid #ccc; margin: 16px 0; padding: 8px 16px; color: #555; font-style: italic; }
+            pre { background: #f4f4f4; border: 1px solid #ddd; border-radius: 4px; padding: 12px; overflow-x: auto; font-size: 13px; margin: 12px 0; }
+            code { background: #f4f4f4; border-radius: 3px; padding: 2px 5px; font-size: 13px; font-family: 'Courier New', monospace; }
+            pre code { background: none; padding: 0; }
+            table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+            th, td { border: 1px solid #aaa; padding: 6px 10px; text-align: left; }
+            th { background: #f0f0f0; font-weight: 700; }
+            hr { border: none; border-top: 1px solid #ccc; margin: 20px 0; }
+            a { color: #0563c1; text-decoration: underline; }
+            strong { font-weight: 700; }
+            em { font-style: italic; }
+            img { max-width: 100%; height: auto; display: block; margin: 8px 0; }
+            </style></head><body><div id="pdf-container">${html}</div></body></html>`);
+        iframeDoc.close();
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const pdfContainer = iframeDoc.getElementById('pdf-container')!;
+
+        const usableEnd = (page: number) => (page + 1) * PAGE_H - MARGIN;
+        const usableStart = (page: number) => page * PAGE_H + MARGIN;
+
+        const avoidBreak = () => {
+            const blocks = pdfContainer.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, table, tr, img');
+            const top0 = pdfContainer.getBoundingClientRect().top;
+            let adjusted = false;
+            for (const el of Array.from(blocks)) {
+                if ((el as HTMLElement).dataset.pbDone) continue;
+                const rect = el.getBoundingClientRect();
+                const elTop = rect.top - top0;
+                const elBottom = rect.bottom - top0;
+                const elH = rect.height;
+                if (elH < 1) continue;
+                const pageOfTop = Math.floor(elTop / PAGE_H);
+                const endOfUsable = usableEnd(pageOfTop);
+                const startOfNextUsable = usableStart(pageOfTop + 1);
+                if (elBottom > endOfUsable && elTop > MARGIN) {
+                    if (elH <= PAGE_H - 2 * MARGIN) {
+                        const push = startOfNextUsable - elTop;
+                        if (push > 0) {
+                            (el as HTMLElement).style.marginTop =
+                                `${push + parseFloat((el as HTMLElement).style.marginTop || '0')}px`;
+                            (el as HTMLElement).dataset.pbDone = '1';
+                            adjusted = true;
+                        }
+                    }
+                }
+            }
+            return adjusted;
+        };
+        for (let i = 0; i < 8 && avoidBreak(); i++) {
+            await new Promise(r => setTimeout(r, 30));
+        }
+
+        const scale = 2;
+        const canvas = await html2canvas(pdfContainer, {
+            scale,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            width: PAGE_W,
+            windowWidth: PAGE_W,
+        });
+
+        document.body.removeChild(iframe);
+
+        const imgWidthPx = canvas.width;
+        const imgHeightPx = canvas.height;
+        const pageSlicePx = PAGE_H * scale;
+        const totalPages = Math.max(1, Math.ceil(imgHeightPx / pageSlicePx));
+
+        const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'letter', compress: true });
+
+        for (let page = 0; page < totalPages; page++) {
+            if (page > 0) pdf.addPage();
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = imgWidthPx;
+            pageCanvas.height = pageSlicePx;
+            const ctx = pageCanvas.getContext('2d')!;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+            const srcY = page * pageSlicePx;
+            const srcH = Math.min(pageSlicePx, imgHeightPx - srcY);
+            if (srcH <= 0) break;
+            ctx.drawImage(canvas, 0, srcY, imgWidthPx, srcH, 0, 0, imgWidthPx, srcH);
+            const imgData = pageCanvas.toDataURL('image/jpeg', 0.95);
+            pdf.addImage(imgData, 'JPEG', 0, 0, 612, 792);
+        }
+
+        const blob = pdf.output('blob');
+        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+
+        return {
+            name: `${baseName}.pdf`,
+            blob,
+            url: URL.createObjectURL(blob),
+            type: 'pdf',
+        };
+    } catch (e: any) {
+        console.error(e);
+        throw new Error('Markdown to PDF conversion failed.');
+    }
+};
+
 export const detectAndConvert = async (file: File, targetFormat?: string): Promise<ConversionResult> => {
     const ext = file.name.split('.').pop()?.toLowerCase();
     
@@ -715,6 +856,7 @@ export const detectAndConvert = async (file: File, targetFormat?: string): Promi
     if (ext === 'xlsx' || ext === 'xls') return convertSpreadsheet(file, 'csv');
     
     // Documents
+    if (ext === 'md') return convertMdToPdf(file);
     if (ext === 'docx') return convertDocxToPdf(file);
     
     // PDF

@@ -59,6 +59,8 @@ const ConverterTool: React.FC = () => {
       return ['mp4', 'mov', 'mkv', 'webm'].includes(ext);
   }
 
+  const isMarkdown = (name: string) => name.split('.').pop()?.toLowerCase() === 'md';
+
   // --- Master Switch Logic ---
 
   const hasImagesInQueue = queue.filter(q => isImage(q.file.name)).length > 1;
@@ -128,6 +130,7 @@ const ConverterTool: React.FC = () => {
               // Document defaults
               if (ext === 'pdf') target = 'image';
               else if (ext === 'docx') target = 'pdf';
+              else if (ext === 'md') target = 'pdf';
               else if (ext === 'csv') target = 'xlsx';
               else if (ext === 'xlsx' || ext === 'xls') target = 'csv';
           }
@@ -268,6 +271,7 @@ const ConverterTool: React.FC = () => {
       if (['xlsx', 'csv', 'xls'].includes(ext || '')) return <FileSpreadsheet size={20} className="text-green-400" />;
       if (['pdf'].includes(ext || '')) return <FileText size={20} className="text-red-400" />;
       if (['docx'].includes(ext || '')) return <FileText size={20} className="text-blue-400" />;
+      if (['md'].includes(ext || '')) return <FileText size={20} className="text-indigo-400" />;
       if (['jpg', 'png', 'jpeg', 'webp', 'svg', 'heic'].includes(ext || '')) return <ImageIcon size={20} className="text-purple-400" />;
       if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'wma'].includes(ext || '')) return <Music size={20} className="text-yellow-400" />;
       if (['mp4', 'mov', 'mkv', 'webm'].includes(ext || '')) return <Video size={20} className="text-cyan-400" />;
@@ -282,7 +286,7 @@ const ConverterTool: React.FC = () => {
         title="File Converter"
         description="Universal format transformation engine. Convert spreadsheets, documents, images, audio, and video entirely in your browser."
         instructions={[
-          "Drag & Drop files (CSV, XLSX, PDF, DOCX, Images, Audio, Video)",
+          "Drag & Drop files (CSV, XLSX, PDF, DOCX, MD, Images, Audio, Video)",
           "For Images, PDFs, Audio, & Video, select your desired output format",
           "Use the master switch in the queue to update all files at once",
           "Video conversion uses WebCodecs (hardware-accelerated, works offline)"
@@ -298,8 +302,8 @@ const ConverterTool: React.FC = () => {
             multiple={true}
             disabled={isProcessing}
             theme="green"
-            limitText="Spreadsheets, Docs, Images, Audio, Video, PDF"
-            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .wma, .mp4, .mov, .mkv, .webm"
+            limitText="Spreadsheets, Docs, Markdown, Images, Audio, Video, PDF"
+            accept=".csv, .xlsx, .xls, .pdf, .docx, .md, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .wma, .mp4, .mov, .mkv, .webm"
         />
 
         {queue.length > 0 && (
@@ -412,7 +416,7 @@ const ConverterTool: React.FC = () => {
                             ref={fileInputRef} 
                             className="hidden" 
                             multiple
-                            accept=".csv, .xlsx, .xls, .pdf, .docx, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .wma, .mp4, .mov, .mkv, .webm"
+                            accept=".csv, .xlsx, .xls, .pdf, .docx, .md, .png, .jpg, .jpeg, .webp, .svg, .heic, .mp3, .wav, .flac, .aac, .m4a, .ogg, .wma, .mp4, .mov, .mkv, .webm"
                             onChange={(e) => {if (e.target.files) addToQueue(Array.from(e.target.files))}}
                             disabled={isProcessing}
                         />
@@ -427,6 +431,13 @@ const ConverterTool: React.FC = () => {
                                     <p className="text-sm font-medium text-gray-200 truncate">{item.file.name}</p>
                                     <p className="text-xs text-gray-500">{formatFileSize(item.file.size)}</p>
                                     
+                                    {/* Markdown Options */}
+                                    {isMarkdown(item.file.name) && item.status === 'idle' && (
+                                        <div className="flex gap-2 mt-2">
+                                            <button onClick={() => setItemTarget(item.id, 'pdf')} className={`text-[10px] px-2 py-1 rounded border ${!item.targetFormat || item.targetFormat === 'pdf' ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>To PDF</button>
+                                        </div>
+                                    )}
+
                                     {/* PDF Options */}
                                     {item.file.name.endsWith('.pdf') && item.status === 'idle' && (
                                         <div className="flex gap-2 mt-2">
