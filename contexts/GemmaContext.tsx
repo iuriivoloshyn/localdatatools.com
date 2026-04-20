@@ -97,30 +97,28 @@ async function fetchModelBytes(
     throw new Error(`Model fetch failed: HTTP ${response.status}`);
   }
   const totalBytes = Number(response.headers.get('content-length')) || MODEL_BYTES_HINT;
+  // Preallocate so we don't briefly hold 2× memory during concatenation.
+  const full = new Uint8Array(totalBytes);
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
+  let offset = 0;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(value);
-    received += value.byteLength;
-    onProgress(received, totalBytes);
+    if (offset + value.byteLength > full.length) {
+      throw new Error('Model response exceeded Content-Length');
+    }
+    full.set(value, offset);
+    offset += value.byteLength;
+    onProgress(offset, totalBytes);
   }
-
-  const full = new Uint8Array(received);
-  let offset = 0;
-  for (const chunk of chunks) {
-    full.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
+  const received = offset === full.length ? full : full.subarray(0, offset);
 
   try {
-    await cache.put(MODEL_URL, new Response(full.slice(), { headers: { 'Content-Type': 'application/octet-stream' } }));
+    await cache.put(MODEL_URL, new Response(received, { headers: { 'Content-Type': 'application/octet-stream' } }));
   } catch (e) {
     console.warn('Cache put failed (offline mode unavailable):', e);
   }
-  return full;
+  return received as Uint8Array;
 }
 
 export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -131,7 +129,6 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [progressVal, setProgressVal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const llmRef = useRef<LlmInference | null>(null);
-  const lastTempRef = useRef<number>(0.7);
   const initializingRef = useRef(false);
 
   const getStats = () => {
@@ -150,18 +147,13 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsLoading(false);
   };
 
+  // Per-call temperature cannot be changed safely: MediaPipe's setOptions()
+  // requires baseOptions.modelAssetBuffer to be re-supplied each time, which
+  // we no longer hold (WASM owns it). Temperature is baked in at init.
   const buildEngineShim = (llm: LlmInference): EngineShim => ({
     chat: {
       completions: {
-        create: async ({ messages, temperature }) => {
-          if (temperature !== undefined && Math.abs(temperature - lastTempRef.current) > 0.01) {
-            try {
-              await llm.setOptions({ temperature });
-              lastTempRef.current = temperature;
-            } catch (e) {
-              console.warn('setOptions(temperature) failed, continuing with previous value', e);
-            }
-          }
+        create: async ({ messages }) => {
           const prompt = messagesToGemmaPrompt(messages);
           const raw = await llm.generateResponse(prompt);
           const cleaned = cleanGemmaOutput(raw);
@@ -204,9 +196,12 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setProgress('Loading GPU Memory...');
       setProgressVal(0.9);
 
-      const llm = await LlmInference.createFromModelBuffer(wasmFileset, modelBytes);
-      await llm.setOptions({ maxTokens: 4096, temperature: 0.7, topK: 40 });
-      lastTempRef.current = 0.7;
+      const llm = await LlmInference.createFromOptions(wasmFileset, {
+        baseOptions: { modelAssetBuffer: modelBytes },
+        maxTokens: 4096,
+        temperature: 0.7,
+        topK: 40,
+      });
 
       llmRef.current = llm;
       setEngine(buildEngineShim(llm));
