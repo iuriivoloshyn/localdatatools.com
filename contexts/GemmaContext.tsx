@@ -39,20 +39,23 @@ const GemmaContext = createContext<GemmaContextType>({} as GemmaContextType);
 export const useGemma = () => useContext(GemmaContext);
 
 function cleanGemmaOutput(raw: string): string {
-  // MediaPipe doesn't auto-stop at chat-template tokens for Gemma 4, so
-  // the model emits `<end_of_turn>` then continues generating a fake next
-  // turn until maxTokens. Truncate at the first stop marker.
-  const stopPatterns = [
-    /<end_of_turn>/i,
-    /<start_of_turn>/i,
-    /<エンド_of_turn>/i, // observed tokenizer quirk on the community Web build
-    /<eos>/i,
-    /<\|end\|>/i,
-  ];
+  // MediaPipe doesn't auto-stop at chat-template tokens. The community
+  // LiteRT conversion also emits mangled variants (`<1end_of_turn>`,
+  // `<starts_of_turn>`, `<エンド_of_turn>`). Find any `of_turn`-ish or
+  // Japanese-variant marker, then cut from the nearest preceding '<'.
   let end = raw.length;
-  for (const p of stopPatterns) {
-    const m = raw.match(p);
-    if (m && m.index !== undefined && m.index < end) end = m.index;
+  const markers: RegExp[] = [
+    /of[_\s]?turn/i,
+    /エンド/,
+    /<\s*(bos|eos|pad|unk)\s*>/i,
+    /<\|\s*end\s*\|>/i,
+  ];
+  for (const m of markers) {
+    const idx = raw.search(m);
+    if (idx === -1) continue;
+    const lt = raw.lastIndexOf('<', idx);
+    const cut = lt !== -1 && idx - lt < 40 ? lt : idx;
+    if (cut < end) end = cut;
   }
   return raw.slice(0, end).trim();
 }
