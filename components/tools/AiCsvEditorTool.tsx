@@ -369,6 +369,8 @@ const AiCsvEditorTool: React.FC = () => {
 
   const cleanGeneratedCode = (rawResponse: string): string => {
     let cleanedCode = rawResponse.trim();
+
+    // Strategy 1: fenced code block
     const codeMatch = rawResponse.match(/```(?:javascript|js|typescript|ts)?\s*([\s\S]*?)```/);
     if (codeMatch) {
         cleanedCode = codeMatch[1].trim();
@@ -376,9 +378,25 @@ const AiCsvEditorTool: React.FC = () => {
         cleanedCode = cleanedCode.replace(/^(Here(?:'s| is)[^\n]*\n+)/i, '');
         cleanedCode = cleanedCode.replace(/^(Code|Logic|JavaScript|Logic Body)[:\s-]+/i, '');
     }
+
+    // Strategy 2: slice from the first line that begins with code-like tokens
     const lines = cleanedCode.split('\n');
-    const firstCodeIdx = lines.findIndex(l => /^(data|const|let|var|if|for|while|function|\/\/|\/\*)/.test(l.trim()));
+    const firstCodeIdx = lines.findIndex(l => /^(data|const|let|var|if|for|while|function|\/\/|\/\*|return)/.test(l.trim()));
     if (firstCodeIdx > 0) cleanedCode = lines.slice(firstCodeIdx).join('\n');
+
+    // Strategy 3 (progressive fallback): if we still don't see a `data =`
+    // assignment or `data.` call, search the whole raw response for the first
+    // occurrence of one and extract from there to the end of the last
+    // recognizable closer. Handles the case where the model prefixes prose
+    // AND intersperses narration with code.
+    if (!/data\s*=|data\./.test(cleanedCode)) {
+        const startMatch = rawResponse.match(/(data\s*=|data\.[a-zA-Z])/);
+        if (startMatch && startMatch.index !== undefined) {
+            cleanedCode = rawResponse.slice(startMatch.index);
+            const lastGood = Math.max(cleanedCode.lastIndexOf(';'), cleanedCode.lastIndexOf('}'));
+            if (lastGood > 0) cleanedCode = cleanedCode.slice(0, lastGood + 1);
+        }
+    }
     cleanedCode = cleanedCode.replace(/(^|\n|\s)(const|let|var)\s+data\s*=/g, '$1data =');
     cleanedCode = cleanedCode.replace(
         /data\s*=\s*data\.filter\(\s*([a-zA-Z_$][\w$]*)\s*=>\s*([^?]+)\?\s*(\{[^}]*\.\.\.\1[^}]*\})\s*:\s*(\{[^}]*\.\.\.\1[^}]*\}|\1)\s*\)/g,
@@ -496,8 +514,14 @@ Rules:
                     setProgress(10 + Math.round(frac * 60));
                 },
             });
-            const cleaned = cleanGeneratedCode(comp.choices[0].message.content);
-            if (!cleaned || cleaned.length < 5) throw new Error('Gemma produced no code. Try rephrasing your request.');
+            const raw = comp.choices[0].message.content;
+            const cleaned = cleanGeneratedCode(raw);
+            if (!cleaned || cleaned.length < 5) {
+                console.warn('[SmartCSV] Gemma raw output (no code extracted):', raw);
+                const err: any = new Error('Gemma produced prose instead of code. Try splitting your request into smaller steps, or rephrase without conversational wording.');
+                err._rawResponse = raw;
+                throw err;
+            }
             checkSyntax(cleaned);
             checkIntent(cleaned, prompt);
             return cleaned;
@@ -509,7 +533,10 @@ Rules:
         } catch (firstErr: any) {
             setStatusMessage('First attempt failed, retrying with correction...');
             setProgress(10);
-            const badCode = firstErr._badCode || '';
+            // On first-attempt failure, feed the raw response (if any) to the
+            // retry so the model sees exactly what it wrote, not just the
+            // extraction error.
+            const badCode = firstErr._rawResponse || firstErr._badCode || '';
             cleanedCode = await attempt({ badCode, err: firstErr.message || String(firstErr) });
         }
 
