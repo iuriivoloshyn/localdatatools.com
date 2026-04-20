@@ -15,7 +15,12 @@ type ImageInput = Blob | File | HTMLImageElement | ImageBitmap | HTMLCanvasEleme
 type MessageContentPart = { type: 'text'; text: string } | { type: 'image'; image: ImageInput };
 type MessageContent = string | MessageContentPart[];
 interface ChatMessage { role: 'system' | 'user' | 'assistant' | 'model'; content: MessageContent; }
-interface ChatCompletionParams { messages: ChatMessage[]; temperature?: number; max_tokens?: number; }
+interface ChatCompletionParams {
+  messages: ChatMessage[];
+  temperature?: number;
+  max_tokens?: number;
+  onPartial?: (cleanedPartial: string) => void;
+}
 interface ChatCompletionResponse { choices: { message: { content: string } }[]; }
 
 // Engine shim that mimics @mlc-ai/web-llm surface: engine.chat.completions.create({...})
@@ -182,9 +187,16 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const buildEngineShim = (llm: LlmInference): EngineShim => ({
     chat: {
       completions: {
-        create: async ({ messages }) => {
+        create: async ({ messages, onPartial }) => {
           const prompt = await messagesToGemmaPrompt(messages);
-          const raw = await llm.generateResponse(prompt);
+          let accumulated = '';
+          const raw = await llm.generateResponse(prompt, (partial: string, _done: boolean) => {
+            accumulated += partial;
+            if (onPartial) {
+              // Stream the cleaned running total so the caller can render it live
+              try { onPartial(cleanGemmaOutput(accumulated)); } catch {}
+            }
+          });
           const cleaned = cleanGemmaOutput(raw);
           return { choices: [{ message: { content: cleaned } }] };
         },

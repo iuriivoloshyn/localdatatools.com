@@ -54,6 +54,7 @@ const OCRTool: React.FC = () => {
   // Engine: 'tesseract' is the fast, specialized OCR default; 'gemma' uses
   // Gemma 4 vision for handwriting, context, and natural-language queries
   const [ocrEngine, setOcrEngine] = useState<'tesseract' | 'gemma'>('tesseract');
+  const [gemmaPrompt, setGemmaPrompt] = useState('');
 
   useEffect(() => {
     const file = consumePendingFile('ocr');
@@ -110,19 +111,30 @@ const OCRTool: React.FC = () => {
               if (!gemmaEngine) throw new Error('Gemma 4 not loaded');
               for (const img of basicImages) {
                   if (img.status === 'completed') continue;
-                  setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'processing' } : i));
-                  const completion = await gemmaEngine.chat.completions.create({
-                      messages: [{
-                          role: 'user',
-                          content: [
-                              { type: 'image', image: img.file },
-                              { type: 'text', text: 'Extract all text visible in this image. Preserve line breaks and reading order. Output only the extracted text, with no commentary, preamble, or explanation.' },
-                          ],
-                      }],
-                      max_tokens: 2048,
-                  });
-                  const text = completion.choices[0]?.message?.content || '';
-                  setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'completed', text } : i));
+                  const startedAt = Date.now();
+                  setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'processing', text: '', elapsedMs: 0 } : i));
+                  const elapsedTicker = window.setInterval(() => {
+                      setBasicImages(prev => prev.map(i => i.id === img.id && i.status === 'processing' ? { ...i, elapsedMs: Date.now() - startedAt } : i));
+                  }, 500);
+                  try {
+                      const completion = await gemmaEngine.chat.completions.create({
+                          messages: [{
+                              role: 'user',
+                              content: [
+                                  { type: 'image', image: img.file },
+                                  { type: 'text', text: gemmaPrompt.trim() || 'Extract all text visible in this image. Preserve line breaks and reading order. Output only the extracted text, with no commentary, preamble, or explanation.' },
+                              ],
+                          }],
+                          max_tokens: 2048,
+                          onPartial: (partial) => {
+                              setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, text: partial } : i));
+                          },
+                      });
+                      const text = completion.choices[0]?.message?.content || '';
+                      setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'completed', text } : i));
+                  } finally {
+                      window.clearInterval(elapsedTicker);
+                  }
               }
           } else {
               const tessLang = lang === 'ru' ? 'rus' : 'eng';
@@ -175,6 +187,19 @@ const OCRTool: React.FC = () => {
                   </button>
               </div>
               <FileUploader onFilesSelected={handleIncomingFiles} multiple={true} disabled={isProcessingBasic || pdfLoading || (ocrEngine === 'gemma' && gemmaLoading)} theme="blue" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.pdf" limitText="Images & PDF files" />
+              {ocrEngine === 'gemma' && (
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                          <Sparkles size={12} className="text-rose-400" /> Custom prompt (optional)
+                      </label>
+                      <textarea
+                          value={gemmaPrompt}
+                          onChange={(e) => setGemmaPrompt(e.target.value)}
+                          placeholder="e.g. 'Extract only the prices as a list' or 'Describe what's in this image' — leave empty for a plain text extraction."
+                          className="w-full h-20 bg-black/40 border border-white/5 rounded-xl p-3 text-xs text-gray-300 focus:border-rose-500/30 outline-none resize-none"
+                      />
+                  </div>
+              )}
           </div>
 
           {ocrEngine === 'gemma' && !gemmaLoaded && (
@@ -228,7 +253,23 @@ const OCRTool: React.FC = () => {
                       </div>
                       <div className="flex-1 p-4 bg-gray-950/50 relative">
                           {img.status === 'processing' ? (
-                              <div className="h-full flex flex-col items-center justify-center text-blue-400"><Loader2 className="animate-spin mb-2" />Analyzing...</div>
+                              <div className="h-full flex flex-col gap-2">
+                                  <div className="flex items-center gap-2 text-blue-400 text-xs font-bold">
+                                      <Loader2 className="animate-spin" size={14} />
+                                      <span>Analyzing</span>
+                                      {typeof img.elapsedMs === 'number' && <span className="text-gray-500 font-mono">{(img.elapsedMs / 1000).toFixed(1)}s</span>}
+                                      {ocrEngine === 'gemma' && typeof img.elapsedMs === 'number' && img.elapsedMs > 15000 && !img.text && (
+                                          <span className="text-amber-400 font-normal italic">encoding image…</span>
+                                      )}
+                                  </div>
+                                  {img.text ? (
+                                      <pre className="whitespace-pre-wrap font-mono text-xs text-gray-400 flex-1">{img.text}<span className="animate-pulse text-rose-400">▋</span></pre>
+                                  ) : (
+                                      <p className="text-[10px] text-gray-600 italic">
+                                          {ocrEngine === 'gemma' ? 'Gemma 4 needs ~20s to encode the image before generating. For crisp printed text, Tesseract is 10× faster.' : 'Loading Tesseract worker…'}
+                                      </p>
+                                  )}
+                              </div>
                           ) : img.text ? (
                               <div className="h-full relative group/copy">
                                   <button onClick={() => { navigator.clipboard.writeText(img.text); setCopiedId(img.id); setTimeout(() => setCopiedId(null), 1500); }} className="absolute top-0 right-0 p-1.5 rounded-lg text-gray-600 hover:text-gray-200 hover:bg-gray-800 transition-colors opacity-0 group-hover/copy:opacity-100" title="Copy">
