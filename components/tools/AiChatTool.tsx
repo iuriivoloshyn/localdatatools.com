@@ -5,7 +5,7 @@ import ToolHeader from '../layout/ToolHeader';
 import { 
   MessageSquareText, Send, Image as ImageIcon, Loader2, User, 
   Bot, Trash2, Settings, SlidersHorizontal, Info, X, 
-  Paperclip, Sparkles, Zap, Cpu, Download, Upload
+  Paperclip, Zap, Cpu, Download, Upload
 } from 'lucide-react';
 import { useLanguage } from '../../App';
 import { useGemma } from '../../contexts/GemmaContext';
@@ -34,7 +34,6 @@ const AiChatTool: React.FC = () => {
   
   // Model Config
   const [systemInstruction, setSystemInstruction] = useState("You use context from previous messages and images provided via local OCR to help the user.");
-  const [temperature, setTemperature] = useState(0.7);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -169,8 +168,7 @@ const AiChatTool: React.FC = () => {
       // 5. Send to Gemma 4
       const completion = await engine.chat.completions.create({
         messages: apiMessages,
-        temperature: temperature,
-        max_tokens: 1024, 
+        max_tokens: 1024,
       });
 
       const responseText = completion.choices[0].message.content;
@@ -468,25 +466,6 @@ const AiChatTool: React.FC = () => {
                     placeholder="Set AI persona..."
                     className="w-full h-32 bg-black/40 border border-white/5 rounded-xl p-3 text-xs text-gray-300 focus:border-rose-500/30 outline-none resize-none"
                     />
-                </div>
-
-                <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <Sparkles size={12} className="text-rose-400" /> Temperature
-                    </label>
-                    <span className="text-[10px] font-mono text-rose-400 font-bold">{temperature.toFixed(1)}</span>
-                    </div>
-                    <input 
-                    type="range" 
-                    min="0" 
-                    max="1.5" 
-                    step="0.1" 
-                    value={temperature}
-                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                    className="w-full accent-rose-500"
-                    />
-                    <p className="text-[9px] text-gray-600 italic">Lower is factual, higher is creative.</p>
                 </div>
 
                 <div className="p-4 bg-rose-500/5 border border-rose-500/10 rounded-2xl space-y-2">
