@@ -38,6 +38,25 @@ interface GemmaContextType {
 const GemmaContext = createContext<GemmaContextType>({} as GemmaContextType);
 export const useGemma = () => useContext(GemmaContext);
 
+function cleanGemmaOutput(raw: string): string {
+  // MediaPipe doesn't auto-stop at chat-template tokens for Gemma 4, so
+  // the model emits `<end_of_turn>` then continues generating a fake next
+  // turn until maxTokens. Truncate at the first stop marker.
+  const stopPatterns = [
+    /<end_of_turn>/i,
+    /<start_of_turn>/i,
+    /<エンド_of_turn>/i, // observed tokenizer quirk on the community Web build
+    /<eos>/i,
+    /<\|end\|>/i,
+  ];
+  let end = raw.length;
+  for (const p of stopPatterns) {
+    const m = raw.match(p);
+    if (m && m.index !== undefined && m.index < end) end = m.index;
+  }
+  return raw.slice(0, end).trim();
+}
+
 function messagesToGemmaPrompt(messages: ChatMessage[]): string {
   const systemParts = messages.filter(m => m.role === 'system').map(m => m.content).filter(Boolean);
   const turns = messages.filter(m => m.role !== 'system');
@@ -144,8 +163,9 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
           }
           const prompt = messagesToGemmaPrompt(messages);
-          const text = await llm.generateResponse(prompt);
-          return { choices: [{ message: { content: text } }] };
+          const raw = await llm.generateResponse(prompt);
+          const cleaned = cleanGemmaOutput(raw);
+          return { choices: [{ message: { content: cleaned } }] };
         },
       },
     },
@@ -185,6 +205,7 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setProgressVal(0.9);
 
       const llm = await LlmInference.createFromModelBuffer(wasmFileset, modelBytes);
+      await llm.setOptions({ maxTokens: 4096, temperature: 0.7, topK: 40 });
       lastTempRef.current = 0.7;
 
       llmRef.current = llm;
