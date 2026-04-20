@@ -470,6 +470,17 @@ Rules:
         // Strip trailing no-op `data = data` lines (model padding)
         cleanedCode = cleanedCode.replace(/(?:^|\n)\s*data\s*=\s*data\s*;?\s*(?=\n|$)/g, '').trim();
 
+        // Strip trailing stray punctuation (quotes, backticks) the model sometimes tacks on
+        cleanedCode = cleanedCode.replace(/[\s"'`]+$/, '');
+        // If the code doesn't end with a valid JS statement terminator, walk
+        // back to the last one — handles cases like `}));"` or `});extra stuff`
+        if (!/[;})\]]\s*$/.test(cleanedCode)) {
+            const lastSemi = cleanedCode.lastIndexOf(';');
+            const lastBrace = cleanedCode.lastIndexOf('}');
+            const cut = Math.max(lastSemi, lastBrace);
+            if (cut > 0) cleanedCode = cleanedCode.slice(0, cut + 1);
+        }
+
         if (!cleanedCode.includes('data =') && !cleanedCode.includes('data.forEach') && (cleanedCode.startsWith('data.') || cleanedCode.startsWith('data ='))) {
             if (!cleanedCode.startsWith('data =')) cleanedCode = 'data = ' + cleanedCode;
         }
@@ -563,7 +574,13 @@ Rules:
                       <textarea
                           value={prompt}
                           onChange={(e) => setPrompt(e.target.value)}
-                          placeholder="Describe your change (e.g., 'Remove rows where age < 18', 'Rename col first to firstname', 'Create fullname from first + last')"
+                          onKeyDown={(e) => {
+                              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                  e.preventDefault();
+                                  if (!isProcessing && prompt.trim() && file) handleApply();
+                              }
+                          }}
+                          placeholder="Describe your change (e.g., 'Remove rows where age < 18', 'Rename col first to firstname')  —  ⌘↵ / Ctrl↵ to send"
                           className="w-full h-40 bg-[#0d1117] border border-gray-800 rounded-3xl p-6 text-sm text-gray-100 placeholder-gray-600 focus:border-fuchsia-500/50 outline-none resize-none transition-all custom-scrollbar shadow-inner"
                           disabled={isProcessing || !file}
                       />
