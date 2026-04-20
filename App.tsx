@@ -19,8 +19,6 @@ const AiChatTool = React.lazy(() => import('./components/tools/AiChatTool'));
 const CompressorTool = React.lazy(() => import('./components/tools/CompressorTool'));
 const GenerateCsvTool = React.lazy(() => import('./components/tools/GenerateCsvTool'));
 const InstantDashboardTool = React.lazy(() => import('./components/tools/InstantDashboardTool'));
-const ApiDocs = React.lazy(() => import('./components/ApiDocs'));
-
 // Expanded Context
 const AppContext = createContext<{
   lang: Language;
@@ -292,14 +290,13 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
     Object.entries(TOOL_SLUGS).map(([slug, id]) => [id, slug])
   );
 
-  const getToolFromPath = (): ToolType | 'dashboard' | 'api-docs' | null => {
+  const getToolFromPath = (): ToolType | 'dashboard' | null => {
     const slug = window.location.pathname.replace(/^\//, '').replace(/\/$/, '');
-    if (slug === 'api-docs' || slug.startsWith('api-docs/')) return 'api-docs';
     return slug ? (TOOL_SLUGS[slug] || null) : null;
   };
 
   const initialTool = getToolFromPath();
-  const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | 'api-docs' | null>(initialTool);
+  const [activeTool, setActiveTool] = useState<ToolType | 'dashboard' | null>(initialTool);
   const [visitedTools, setVisitedTools] = useState<Set<string>>(() => {
     const set = new Set<string>();
     if (initialTool) set.add(initialTool);
@@ -494,21 +491,19 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
     return () => { document.body.style.overflow = ''; };
   }, [isZenMode]);
 
-  const handleToolClick = (tool: ToolType | 'dashboard' | 'api-docs' | null) => {
+  const handleToolClick = (tool: ToolType | 'dashboard' | null) => {
     if (tool === activeTool) return;
     if (tool) {
         setVisitedTools(prev => new Set(prev).add(tool));
     }
     setActiveTool(tool);
     // Update URL
-    const slug = tool === 'api-docs' ? 'api-docs' : tool ? (TOOL_TO_SLUG[tool] || tool) : '';
+    const slug = tool ? (TOOL_TO_SLUG[tool] || tool) : '';
     const newPath = slug ? `/${slug}` : '/';
     window.history.pushState(null, '', newPath);
     // Update title & canonical
     if (!tool) {
       document.title = 'Local Data Tools — Free Offline File Converter, CSV Merger, OCR & Data Toolkit';
-    } else if (tool === 'api-docs') {
-      document.title = 'API Docs — Local Data Tools';
     } else {
       const toolConfig = TOOLS_LIST.find(t => t.id === tool);
       document.title = toolConfig ? `${toolConfig.label} — Local Data Tools` : 'Local Data Tools';
@@ -632,7 +627,6 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
               </div>
               
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <button onClick={() => handleToolClick('api-docs')} className={`text-xs font-medium transition-colors px-3 py-1.5 rounded-lg border ${activeTool === 'api-docs' ? 'text-indigo-400 border-indigo-500/30 bg-indigo-500/10' : 'text-gray-500 hover:text-white border-transparent hover:border-white/10 hover:bg-white/5'}`}>API</button>
                   <div className="relative h-9 w-9" ref={settingsRef}>
                     <button onClick={(e) => { e.stopPropagation(); setIsSettingsOpen(!isSettingsOpen); }} className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-all shadow-sm p-0 bg-gray-900 border-white/[0.06] ${isSettingsOpen ? 'bg-gray-800 border-gray-700 text-white' : 'text-gray-400 hover:text-white hover:border-gray-600'}`}><SettingsIcon size={16} strokeWidth={2} /></button>
                     {isSettingsOpen && (
@@ -680,13 +674,7 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
             </div>
           </nav>
 
-          {activeTool === 'api-docs' ? (
-              <div key="api-docs" className={`flex-1 overflow-y-auto ${transitionClass}`}>
-                <Suspense fallback={<ToolLoader />}>
-                  <ApiDocs />
-                </Suspense>
-              </div>
-          ) : !activeTool ? (
+          {!activeTool ? (
               <div key="landing" className={`relative w-full flex-1 overflow-hidden flex flex-col items-center justify-center ${transitionClass}`}>
                    <div className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center">
                        <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] rounded-full transition-colors duration-1000" style={{ background: `radial-gradient(circle, ${theme.heroGlow} 0%, rgba(0,0,0,0) 70%)`, filter: 'blur(100px)', transform: 'translate3d(0,0,0)' }} />
