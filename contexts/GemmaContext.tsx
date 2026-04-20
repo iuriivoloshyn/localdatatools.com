@@ -10,8 +10,11 @@ const CACHE_NAME = 'gemma-4-e2b-v1';
 
 const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai@0.10.27/wasm';
 
-// OpenAI-style message used by AiChatTool and AiCsvEditorTool
-interface ChatMessage { role: 'system' | 'user' | 'assistant' | 'model'; content: string; }
+// OpenAI-style message used by AiChatTool / AiCsvEditorTool / OCRTool
+type ImageInput = Blob | File | HTMLImageElement | ImageBitmap | HTMLCanvasElement | string;
+type MessageContentPart = { type: 'text'; text: string } | { type: 'image'; image: ImageInput };
+type MessageContent = string | MessageContentPart[];
+interface ChatMessage { role: 'system' | 'user' | 'assistant' | 'model'; content: MessageContent; }
 interface ChatCompletionParams { messages: ChatMessage[]; temperature?: number; max_tokens?: number; }
 interface ChatCompletionResponse { choices: { message: { content: string } }[]; }
 
@@ -60,28 +63,51 @@ function cleanGemmaOutput(raw: string): string {
   return raw.slice(0, end).trim();
 }
 
-function messagesToGemmaPrompt(messages: ChatMessage[]): string {
-  const systemParts = messages.filter(m => m.role === 'system').map(m => m.content).filter(Boolean);
+// Coerce supported image inputs into MediaPipe-compatible sources (ImageBitmap or string URL)
+async function toImageSource(img: ImageInput): Promise<any> {
+  if (typeof img === 'string') return img;
+  if (img instanceof Blob) return await createImageBitmap(img);
+  return img; // HTMLImageElement, HTMLCanvasElement, ImageBitmap — already accepted
+}
+
+function contentToText(content: MessageContent): string {
+  if (typeof content === 'string') return content;
+  return content.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text).join('\n');
+}
+
+// Returns a MediaPipe Prompt: array interleaving strings and { imageSource } objects
+async function messagesToGemmaPrompt(messages: ChatMessage[]): Promise<any[]> {
+  const systemText = messages
+    .filter(m => m.role === 'system')
+    .map(m => contentToText(m.content))
+    .filter(Boolean)
+    .join('\n\n');
   const turns = messages.filter(m => m.role !== 'system');
 
-  let out = '';
+  const parts: any[] = [];
   let firstUserSeen = false;
   for (const m of turns) {
     if (m.role === 'user') {
-      let content = m.content;
-      if (!firstUserSeen && systemParts.length > 0) {
-        content = systemParts.join('\n\n') + '\n\n' + content;
-        firstUserSeen = true;
+      parts.push(firstUserSeen || !systemText
+        ? '<start_of_turn>user\n'
+        : `<start_of_turn>user\n${systemText}\n\n`);
+      firstUserSeen = true;
+
+      if (typeof m.content === 'string') {
+        parts.push(m.content);
       } else {
-        firstUserSeen = true;
+        for (const p of m.content) {
+          if (p.type === 'text') parts.push(p.text);
+          else parts.push({ imageSource: await toImageSource(p.image) });
+        }
       }
-      out += `<start_of_turn>user\n${content}<end_of_turn>\n`;
+      parts.push('<end_of_turn>\n');
     } else {
-      out += `<start_of_turn>model\n${m.content}<end_of_turn>\n`;
+      parts.push(`<start_of_turn>model\n${contentToText(m.content)}<end_of_turn>\n`);
     }
   }
-  out += '<start_of_turn>model\n';
-  return out;
+  parts.push('<start_of_turn>model\n');
+  return parts;
 }
 
 async function fetchModelBytes(
@@ -157,7 +183,7 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     chat: {
       completions: {
         create: async ({ messages }) => {
-          const prompt = messagesToGemmaPrompt(messages);
+          const prompt = await messagesToGemmaPrompt(messages);
           const raw = await llm.generateResponse(prompt);
           const cleaned = cleanGemmaOutput(raw);
           return { choices: [{ message: { content: cleaned } }] };
@@ -165,7 +191,7 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       },
     },
     unload: async () => { try { llm.close(); } catch {} },
-    runtimeStatsText: () => 'MediaPipe LlmInference (Gemma 4 E2B)',
+    runtimeStatsText: () => 'MediaPipe LlmInference (Gemma 4 E2B, vision)',
   });
 
   const createEngineInternal = async (signalLoaded: boolean): Promise<void> => {
@@ -204,6 +230,7 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         maxTokens: 4096,
         temperature: 0.7,
         topK: 40,
+        maxNumImages: 3,
       });
 
       llmRef.current = llm;
