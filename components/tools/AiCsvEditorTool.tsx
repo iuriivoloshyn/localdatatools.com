@@ -385,76 +385,29 @@ const AiCsvEditorTool: React.FC = () => {
     try {
         const sampleJson = JSON.stringify(fullDataRef.current.slice(0, 5), null, 2);
         
-        // Context-Specific Persona
-        const systemInstruction = `You are a world-class JavaScript data transformation engine.
-INPUT: An array of objects called 'data'.
-CONTEXT:
-- Columns (use EXACTLY as-is, preserving case and any spaces): ${JSON.stringify(headers)}
-- Sample Data: ${sampleJson}
+        // Compact system prompt. Every token here re-processes on every
+        // request at ~50 tok/s on WebGPU, so brevity = speed.
+        const systemInstruction = `JS data transformer. Input: array 'data'. Output: ONLY JS, no prose, no markdown. Final state of 'data' = transformed array. Never re-declare with let/const/var.
 
-HELPERS AVAILABLE:
-- str(value): coerces to string safely. USE BEFORE any .replace/.includes/.toLowerCase/.split on row values.
-- num(value): coerces to number safely (handles "$1,000", "1.5k"-like strings, null, undefined). USE FOR math and > < === comparisons.
+Columns (use verbatim, case-sensitive): ${JSON.stringify(headers)}
+Sample: ${sampleJson}
 
-OUTPUT FORMAT:
-- Return ONLY executable JavaScript. No explanation. No markdown. No preamble.
-- The final line MUST leave 'data' holding the transformed array.
-- Never redeclare 'data' with let/const/var. Only reassign with 'data = ...'.
+Helpers (always wrap row values):
+- str(v) → string-safe (use before .replace/.includes/.toLowerCase)
+- num(v) → number-safe (use before + - * / > < ===)
 
-COLUMN NAMES:
-- Column names are case-sensitive. Use them EXACTLY as given in the Columns list — preserve uppercase, lowercase, spaces, underscores, and special characters verbatim. Do NOT normalize the case.
-- **ALWAYS use bracket notation \`r["Column Name"]\` for column access, NOT dot notation.** This avoids syntax errors when column names contain spaces, hyphens, or special characters, and keeps behavior consistent regardless of case.
-  - CORRECT: \`str(r["big daddy"])\`, \`num(r["Unit Price"])\`, \`r["ID"]\`, \`r["steam_price_en"]\`
-  - WRONG: \`r.big daddy\` (SyntaxError), \`r.Unit Price\` (SyntaxError), \`r.id\` (wrong column if the real name is "ID" uppercase)
-- If the user refers to a column with different casing ("price per unit" vs actual column "Price Per Unit"), map to the real column name verbatim via bracket notation.
+Column access: ALWAYS bracket notation r["col name"], never r.col (avoids syntax errors with spaces/specials).
 
-RULES:
-
-1. **.map() vs .filter() — MOST COMMON MISTAKE**:
-   - Use .map() to TRANSFORM rows: add columns, update values, conditional updates. Callback MUST return the row object.
-   - Use .filter() to DROP rows. Callback MUST return a boolean. Returning an object from .filter() silently keeps the row UNCHANGED — your transformation will be lost.
-   - "Put 1 in col_x if price > 1000" -> .map:
-     \`data = data.map(r => num(r["price"]) > 1000 ? { ...r, ["col_x"]: "1" } : { ...r, ["col_x"]: "" });\`
-   - "Delete rows where status is error" -> .filter:
-     \`data = data.filter(r => str(r["status"]) !== 'error');\`
-
-2. **ADDING A COLUMN**: Default value is empty string "" unless the user specifies otherwise. Do NOT copy another column's data. Do NOT uppercase anything. Do NOT fabricate data.
-   - "Add column named foo" -> \`data = data.map(r => ({ ...r, ["foo"]: "" }));\`
-
-3. **UPDATING A COLUMN** conditionally: return one object in each branch of the ternary, both with the spread.
-   - "Mark foo = 'yes' if age > 18, else 'no'" -> \`data = data.map(r => ({ ...r, ["foo"]: num(r["age"]) > 18 ? "yes" : "no" }));\`
-
-4. **RENAMING A COLUMN**: build a new object without the old key using bracket notation.
-   - "Rename 'name' to 'full_name'" -> \`data = data.map(r => { const { ["name"]: v, ...rest } = r; return { ...rest, ["full_name"]: v }; });\`
-
-5. **DELETING A COLUMN**: destructure it out using bracket notation.
-   - "Delete the 'temp' column" -> \`data = data.map(r => { const { ["temp"]: _drop, ...rest } = r; return rest; });\`
-
-6. **CLEARING A COLUMN**: set it to "".
-   - "Clear the foo column" -> \`data = data.map(r => ({ ...r, ["foo"]: "" }));\`
-
-7. **SORTING**:
-   - "Z to A", "Largest to Smallest", "Descending" -> \`data.sort((a,b) => num(b["col"]) - num(a["col"]))\` (numeric) OR \`data.sort((a,b) => str(b["col"]).localeCompare(str(a["col"])))\` (text).
-   - "A to Z", "Smallest to Largest", "Ascending" -> \`data.sort((a,b) => num(a["col"]) - num(b["col"]))\`.
-   - "Sort Z to A" means ORDERING. DO NOT generate .replace("Z","A") for this.
-
-8. **STRING OPS** — always wrap with str() first, always bracket-access:
-   - \`str(r["name"]).toLowerCase()\` not \`r.name.toLowerCase()\`
-   - \`str(r["email"]).includes('@')\` not \`r.email.includes('@')\`
-
-9. **NUMERIC OPS** — always wrap with num() first, always bracket-access:
-   - \`num(r["price"]) > 1000\` not \`r.price > 1000\`
-   - \`num(r["price"]) + num(r["tax"])\` not \`r.price + r.tax\`
-
-10. **SUMMARY / AGGREGATION**: if user asks for a single value (e.g. "average age", "count", "total sales"), REPLACE data with a single-row array:
-    - "Average age" -> \`const avg = data.reduce((s, r) => s + num(r["age"]), 0) / data.length; data = [{ average_age: avg }];\`
-    - "Count rows where city is Paris" -> \`const count = data.filter(r => str(r["city"]).toLowerCase() === 'paris').length; data = [{ count: count }];\`
-
-11. **REMEMBER PREVIOUS STEPS**: if earlier turns added or modified columns, they exist now. Build on them, don't recreate.
-
-12. **AMBIGUOUS REQUEST**: if the column or operation is unclear, pick the most sensible interpretation using the sample data. Never output an empty program or a comment-only program.
-
-13. **OUTPUT LENGTH**: produce ONLY the statements needed to fulfill the request. Do NOT emit filler lines like \`data = data\` or trailing blank assignments.`;
+Rules:
+1. .map to transform/add/update, .filter to drop. Returning an object from .filter keeps the row unchanged — DON'T.
+2. Add column → .map with default "". e.g. \`data = data.map(r => ({ ...r, ["foo"]: "" }));\`
+3. Conditional update → both ternary branches spread r. e.g. \`data = data.map(r => ({ ...r, ["x"]: num(r["price"]) > 1000 ? "1" : "" }));\`
+4. Delete col → \`data = data.map(r => { const { ["x"]: _, ...rest } = r; return rest; });\`
+5. Rename col → \`data = data.map(r => { const { ["old"]: v, ...rest } = r; return { ...rest, ["new"]: v }; });\`
+6. Sort desc → \`data.sort((a,b) => num(b["c"]) - num(a["c"]))\`. Asc → flip. "Z to A" = ordering, NOT .replace.
+7. Aggregation (single value) → replace data with one-row array. e.g. \`data = [{ avg: data.reduce((s,r)=>s+num(r["age"]),0)/data.length }];\`
+8. Remember prior turns' columns exist.
+9. No \`data = data\` padding. One statement per operation.`;
 
         // Utilize Local Context
         const messages = [
@@ -466,7 +419,13 @@ RULES:
         const completion = await engine.chat.completions.create({
             messages,
             temperature: 0.0,
-            max_tokens: 1024
+            max_tokens: 1024,
+            onPartial: (partial: string) => {
+                // Tokens arriving → advance the bar 10% → 70% based on
+                // output length vs a typical ~250-char completion.
+                const frac = Math.min(1, partial.length / 250);
+                setProgress(10 + Math.round(frac * 60));
+            },
         });
 
         const rawResponse = completion.choices[0].message.content;
