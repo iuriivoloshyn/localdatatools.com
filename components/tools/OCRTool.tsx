@@ -3,8 +3,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createWorker } from 'tesseract.js';
 import ToolHeader from '../layout/ToolHeader';
 import FileUploader from '../FileUploader';
-import { ScanText, Loader2, FileText, Copy, CheckCircle2 } from 'lucide-react';
+import { ScanText, Loader2, FileText, Copy, CheckCircle2, Sparkles, Download, Cpu } from 'lucide-react';
 import { useLanguage } from '../../App';
+import { useGemma } from '../../contexts/GemmaContext';
 
 const pdfToImages = async (file: File): Promise<File[]> => {
   const pdfjsModule = await import('pdfjs-dist');
@@ -34,6 +35,15 @@ const pdfToImages = async (file: File): Promise<File[]> => {
 
 const OCRTool: React.FC = () => {
   const { t, lang, consumePendingFile, pendingFile } = useLanguage();
+  const {
+    engine: gemmaEngine,
+    isModelLoaded: gemmaLoaded,
+    isLoading: gemmaLoading,
+    progress: gemmaProgress,
+    progressVal: gemmaProgressVal,
+    error: gemmaError,
+    initGemma,
+  } = useGemma();
 
   // Basic Mode State
   const [basicImages, setBasicImages] = useState<any[]>([]);
@@ -41,6 +51,10 @@ const OCRTool: React.FC = () => {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Engine: 'tesseract' is the fast, specialized OCR default; 'gemma' uses
+  // Gemma 4 vision for handwriting, context, and natural-language queries
+  const [ocrEngine, setOcrEngine] = useState<'tesseract' | 'gemma'>('tesseract');
+  const [gemmaPrompt, setGemmaPrompt] = useState('');
 
   useEffect(() => {
     const file = consumePendingFile('ocr');
@@ -92,23 +106,52 @@ const OCRTool: React.FC = () => {
 
   const processBasic = async () => {
       setIsProcessingBasic(true);
-      const tessLang = lang === 'ru' ? 'rus' : 'eng';
-      let worker: any = null;
       try {
-          worker = await createWorker(tessLang, 1, {
-            workerPath: 'https://models.localdatatools.com/tesseract/worker.min.js',
-            corePath: 'https://models.localdatatools.com/tesseract/tesseract-core.wasm.js',
-            langPath: 'https://models.localdatatools.com/tesseract/',
-            gzip: true,
-          });
-
-          for (const img of basicImages) {
-              if (img.status === 'completed') continue;
-              setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'processing' } : i));
-              const ret = await worker.recognize(img.file);
-              setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'completed', text: ret.data.text } : i));
+          if (ocrEngine === 'gemma') {
+              if (!gemmaEngine) throw new Error('Gemma 4 not loaded');
+              for (const img of basicImages) {
+                  if (img.status === 'completed') continue;
+                  const startedAt = Date.now();
+                  setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'processing', text: '', elapsedMs: 0 } : i));
+                  const elapsedTicker = window.setInterval(() => {
+                      setBasicImages(prev => prev.map(i => i.id === img.id && i.status === 'processing' ? { ...i, elapsedMs: Date.now() - startedAt } : i));
+                  }, 500);
+                  try {
+                      const completion = await gemmaEngine.chat.completions.create({
+                          messages: [{
+                              role: 'user',
+                              content: [
+                                  { type: 'image', image: img.file },
+                                  { type: 'text', text: gemmaPrompt.trim() || 'Extract all text visible in this image. Preserve line breaks and reading order. Output only the extracted text, with no commentary, preamble, or explanation.' },
+                              ],
+                          }],
+                          max_tokens: 2048,
+                          onPartial: (partial) => {
+                              setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, text: partial } : i));
+                          },
+                      });
+                      const text = completion.choices[0]?.message?.content || '';
+                      setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'completed', text } : i));
+                  } finally {
+                      window.clearInterval(elapsedTicker);
+                  }
+              }
+          } else {
+              const tessLang = lang === 'ru' ? 'rus' : 'eng';
+              const worker = await createWorker(tessLang, 1, {
+                  workerPath: 'https://models.localdatatools.com/tesseract/worker.min.js',
+                  corePath: 'https://models.localdatatools.com/tesseract/tesseract-core.wasm.js',
+                  langPath: 'https://models.localdatatools.com/tesseract/',
+                  gzip: true,
+              });
+              for (const img of basicImages) {
+                  if (img.status === 'completed') continue;
+                  setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'processing' } : i));
+                  const ret = await worker.recognize(img.file);
+                  setBasicImages(prev => prev.map(i => i.id === img.id ? { ...i, status: 'completed', text: ret.data.text } : i));
+              }
+              await worker.terminate();
           }
-          await worker.terminate();
       } catch (e) {
           console.error(e);
       } finally {
@@ -118,9 +161,9 @@ const OCRTool: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      <ToolHeader 
+      <ToolHeader
         title="Image to Text"
-        description="Extract text from images using local Tesseract OCR. Processing happens entirely on your device."
+        description="Extract text from images. Tesseract is fast and specialized for printed text; Gemma 4 vision handles handwriting, tables, and context."
         icon={ScanText}
         colorClass="text-blue-400"
         onReset={handleReset}
@@ -128,9 +171,55 @@ const OCRTool: React.FC = () => {
       />
 
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-          <div className="max-w-2xl mx-auto">
-              <FileUploader onFilesSelected={handleIncomingFiles} multiple={true} disabled={isProcessingBasic || pdfLoading} theme="blue" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.pdf" limitText="Images & PDF files" />
+          <div className="max-w-2xl mx-auto space-y-4">
+              <div className="flex gap-2 bg-gray-900/60 p-1 rounded-xl border border-white/5">
+                  <button
+                      onClick={() => setOcrEngine('tesseract')}
+                      className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${ocrEngine === 'tesseract' ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                      <ScanText size={14} /> Tesseract <span className="opacity-60 font-normal">(fast, printed text)</span>
+                  </button>
+                  <button
+                      onClick={() => setOcrEngine('gemma')}
+                      className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${ocrEngine === 'gemma' ? 'bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                      <Sparkles size={14} /> Gemma 4 <span className="opacity-60 font-normal">(handwriting, context)</span>
+                  </button>
+              </div>
+              <FileUploader onFilesSelected={handleIncomingFiles} multiple={true} disabled={isProcessingBasic || pdfLoading || (ocrEngine === 'gemma' && gemmaLoading)} theme="blue" accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.pdf" limitText="Images & PDF files" />
+              {ocrEngine === 'gemma' && (
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                          <Sparkles size={12} className="text-rose-400" /> Custom prompt (optional)
+                      </label>
+                      <textarea
+                          value={gemmaPrompt}
+                          onChange={(e) => setGemmaPrompt(e.target.value)}
+                          placeholder="e.g. 'Extract only the prices as a list' or 'Describe what's in this image' — leave empty for a plain text extraction."
+                          className="w-full h-20 bg-black/40 border border-white/5 rounded-xl p-3 text-xs text-gray-300 focus:border-rose-500/30 outline-none resize-none"
+                      />
+                  </div>
+              )}
           </div>
+
+          {ocrEngine === 'gemma' && !gemmaLoaded && (
+              <div className="max-w-2xl mx-auto bg-gray-900 border border-rose-500/20 p-6 rounded-2xl text-center">
+                  <Cpu size={32} className="mx-auto mb-3 text-rose-400" />
+                  <h3 className="text-base font-bold text-white mb-1">Gemma 4 not loaded</h3>
+                  <p className="text-xs text-gray-400 mb-4">~2 GB download runs once, then cached on your device. Enables handwriting recognition and contextual extraction.</p>
+                  {!gemmaLoading ? (
+                      <button onClick={initGemma} className="bg-gradient-to-br from-rose-600 to-pink-700 hover:from-rose-500 hover:to-pink-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold inline-flex items-center gap-2 shadow-lg active:scale-95">
+                          <Download size={16} /> Load Gemma 4 E2B
+                      </button>
+                  ) : (
+                      <div className="space-y-2 max-w-sm mx-auto">
+                          <div className="flex justify-between text-[10px] font-black text-rose-400 uppercase tracking-widest"><span>{gemmaProgress}</span><span>{Math.round(gemmaProgressVal * 100)}%</span></div>
+                          <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden border border-white/5"><div className="h-full bg-rose-500 transition-all duration-300" style={{ width: `${gemmaProgressVal * 100}%` }} /></div>
+                      </div>
+                  )}
+                  {gemmaError && <div className="mt-4 p-3 bg-red-950/20 border border-red-500/20 rounded-xl text-left text-red-400 text-[10px] font-mono leading-relaxed">{gemmaError}</div>}
+              </div>
+          )}
           {pdfLoading && (
               <div className="flex justify-center items-center gap-2 text-blue-400">
                   <Loader2 className="animate-spin" size={18} />
@@ -139,8 +228,8 @@ const OCRTool: React.FC = () => {
           )}
           {basicImages.length > 0 && !pdfLoading && (
               <div className="flex justify-center gap-3">
-                  <button onClick={processBasic} disabled={isProcessingBasic} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-xl">
-                      {isProcessingBasic ? <Loader2 className="animate-spin" size={20} /> : <ScanText size={20} />}
+                  <button onClick={processBasic} disabled={isProcessingBasic || (ocrEngine === 'gemma' && !gemmaLoaded)} className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-xl">
+                      {isProcessingBasic ? <Loader2 className="animate-spin" size={20} /> : ocrEngine === 'gemma' ? <Sparkles size={20} /> : <ScanText size={20} />}
                       Extract Text From {basicImages.length} {basicImages.length === 1 ? 'Image' : 'Images'}
                   </button>
                   {basicImages.some(img => img.text) && (
@@ -164,7 +253,23 @@ const OCRTool: React.FC = () => {
                       </div>
                       <div className="flex-1 p-4 bg-gray-950/50 relative">
                           {img.status === 'processing' ? (
-                              <div className="h-full flex flex-col items-center justify-center text-blue-400"><Loader2 className="animate-spin mb-2" />Analyzing...</div>
+                              <div className="h-full flex flex-col gap-2">
+                                  <div className="flex items-center gap-2 text-blue-400 text-xs font-bold">
+                                      <Loader2 className="animate-spin" size={14} />
+                                      <span>Analyzing</span>
+                                      {typeof img.elapsedMs === 'number' && <span className="text-gray-500 font-mono">{(img.elapsedMs / 1000).toFixed(1)}s</span>}
+                                      {ocrEngine === 'gemma' && typeof img.elapsedMs === 'number' && img.elapsedMs > 15000 && !img.text && (
+                                          <span className="text-amber-400 font-normal italic">encoding image…</span>
+                                      )}
+                                  </div>
+                                  {img.text ? (
+                                      <pre className="whitespace-pre-wrap font-mono text-xs text-gray-400 flex-1">{img.text}<span className="animate-pulse text-rose-400">▋</span></pre>
+                                  ) : (
+                                      <p className="text-[10px] text-gray-600 italic">
+                                          {ocrEngine === 'gemma' ? 'Gemma 4 needs ~20s to encode the image before generating. For crisp printed text, Tesseract is 10× faster.' : 'Loading Tesseract worker…'}
+                                      </p>
+                                  )}
+                              </div>
                           ) : img.text ? (
                               <div className="h-full relative group/copy">
                                   <button onClick={() => { navigator.clipboard.writeText(img.text); setCopiedId(img.id); setTimeout(() => setCopiedId(null), 1500); }} className="absolute top-0 right-0 p-1.5 rounded-lg text-gray-600 hover:text-gray-200 hover:bg-gray-800 transition-colors opacity-0 group-hover/copy:opacity-100" title="Copy">

@@ -33,7 +33,9 @@ const AiChatTool: React.FC = () => {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   
   // Model Config
-  const [systemInstruction, setSystemInstruction] = useState("You use context from previous messages and images provided via local OCR to help the user.");
+  const [systemInstruction, setSystemInstruction] = useState("You use context from previous messages and images to help the user.");
+  // Image handling: 'vision' = send images directly to Gemma 4; 'ocr' = Tesseract text extraction first
+  const [imageMode, setImageMode] = useState<'vision' | 'ocr'>('vision');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -143,29 +145,40 @@ const AiChatTool: React.FC = () => {
     setIsSending(true);
 
     try {
-      // 2. Perform OCR on any images
-      const ocrResults = await processOcr(currentImages.map(img => img.file));
-      
-      // 3. Construct message for Gemma 4
-      let finalPrompt = userText;
-      if (ocrResults.length > 0) {
+      // 2. Build the current user turn's content. Vision mode passes images
+      //    directly to Gemma 4; OCR mode extracts text via Tesseract first.
+      let ocrResults: string[] = [];
+      let currentUserContent: any;
+
+      if (currentImages.length > 0 && imageMode === 'vision') {
+        const parts: any[] = [];
+        for (const img of currentImages) parts.push({ type: 'image', image: img.file });
+        const promptText = userText || 'Describe what you see in the image(s) above.';
+        parts.push({ type: 'text', text: promptText });
+        currentUserContent = parts;
+      } else if (currentImages.length > 0 && imageMode === 'ocr') {
+        ocrResults = await processOcr(currentImages.map(img => img.file));
         const ocrCombined = ocrResults.map((text, i) => `[Image ${i+1} OCR Text: ${text}]`).join('\n\n');
-        finalPrompt = `${ocrCombined}\n\nUser Message: ${userText || "Please analyze the extracted text above."}`;
+        currentUserContent = `${ocrCombined}\n\nUser Message: ${userText || 'Please analyze the extracted text above.'}`;
+      } else {
+        currentUserContent = userText;
       }
 
-      // 4. Construct Full History for Context
-      const apiMessages = [
-        { role: "system", content: systemInstruction },
+      // 3. Construct history. Prior turns keep text-only representation — vision
+      //    context from earlier images is expensive to replay and Gemma handles
+      //    follow-up questions adequately from the model's own prior answer.
+      const apiMessages: any[] = [
+        { role: 'system', content: systemInstruction },
         ...messages.map(m => ({
-            role: m.role === 'model' ? 'assistant' : 'user',
-            content: m.ocrResults ? 
-                `${m.ocrResults.map((t, i) => `[Image ${i+1} Context]: ${t}`).join('\n')}\n${m.content}` 
-                : m.content
+          role: m.role === 'model' ? 'assistant' : 'user',
+          content: m.ocrResults
+            ? `${m.ocrResults.map((t, i) => `[Image ${i+1} Context]: ${t}`).join('\n')}\n${m.content}`
+            : m.content,
         })),
-        { role: "user", content: finalPrompt }
+        { role: 'user', content: currentUserContent },
       ];
 
-      // 5. Send to Gemma 4
+      // 4. Send to Gemma 4
       const completion = await engine.chat.completions.create({
         messages: apiMessages,
         max_tokens: 1024,
@@ -173,13 +186,13 @@ const AiChatTool: React.FC = () => {
 
       const responseText = completion.choices[0].message.content;
 
-      // 6. Add AI Message to Context
+      // 5. Add AI Message to Context
       const aiMessage: ChatMessage = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'model',
         content: responseText || '',
         timestamp: Date.now(),
-        ocrResults: ocrResults.length > 0 ? ocrResults : undefined
+        ocrResults: ocrResults.length > 0 ? ocrResults : undefined,
       };
       addChatMessage(aiMessage);
 
@@ -263,12 +276,12 @@ const AiChatTool: React.FC = () => {
       <div className={!isModelLoaded ? "" : "shrink-0 mb-4"}>
         <ToolHeader 
           title="AI Chat"
-          description="Talk with Gemma 4 E2B (Local). Integrated Tesseract OCR extracts text from images for discussion context."
+          description="Talk with Gemma 4 E2B (Local). Drop images for native vision analysis, or switch to Tesseract OCR in settings for pure text extraction."
           instructions={[
-            "Click the paperclip or Drag & Drop images for local OCR analysis",
-            "History is purely in-memory (resets on reload)",
+            "Click the paperclip or Drag & Drop images — Gemma 4 sees them directly by default",
+            "Switch to Tesseract OCR in settings if you only need text extraction",
             "System Instructions allow you to steer the AI's persona",
-            "Runs entirely in your browser using WebGPU"
+            "Runs entirely in your browser via WebGPU — history resets on reload"
           ]}
           icon={MessageSquareText}
           colorClass="text-rose-400"
@@ -305,7 +318,7 @@ const AiChatTool: React.FC = () => {
                 {isDraggingOver && (
                     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-950/80 backdrop-blur-sm animate-in fade-in">
                         <Upload size={48} className="text-rose-400 mb-4 animate-bounce" />
-                        <h3 className="text-xl font-bold text-white">Drop Images to Scan</h3>
+                        <h3 className="text-xl font-bold text-white">{imageMode === 'vision' ? 'Drop Images for Gemma 4 to See' : 'Drop Images for Tesseract OCR'}</h3>
                     </div>
                 )}
 
@@ -458,9 +471,34 @@ const AiChatTool: React.FC = () => {
                 <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar">
                 <div className="space-y-3">
                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                    <ImageIcon size={12} className="text-rose-400" /> Image handling
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 bg-black/40 p-1 rounded-xl border border-white/5">
+                        <button
+                            onClick={() => setImageMode('vision')}
+                            className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${imageMode === 'vision' ? 'bg-rose-500/20 text-rose-300 shadow-sm ring-1 ring-rose-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            Gemma Vision
+                        </button>
+                        <button
+                            onClick={() => setImageMode('ocr')}
+                            className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${imageMode === 'ocr' ? 'bg-rose-500/20 text-rose-300 shadow-sm ring-1 ring-rose-500/30' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            Tesseract OCR
+                        </button>
+                    </div>
+                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                        {imageMode === 'vision'
+                            ? 'Images go straight to Gemma 4. It can describe scenes, read handwriting, interpret charts, and answer open-ended questions.'
+                            : 'Tesseract extracts printed text only and sends it to Gemma 4 as a transcript. Faster, but no image understanding.'}
+                    </p>
+                </div>
+
+                <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                     <Zap size={12} className="text-rose-400" /> System Instruction
                     </label>
-                    <textarea 
+                    <textarea
                     value={systemInstruction}
                     onChange={(e) => setSystemInstruction(e.target.value)}
                     placeholder="Set AI persona..."
@@ -474,10 +512,8 @@ const AiChatTool: React.FC = () => {
                     <span className="text-[10px] font-black uppercase tracking-widest">Privacy Info</span>
                     </div>
                     <p className="text-[11px] text-gray-400 leading-relaxed">
-                    Images are processed using <span className="text-rose-300 font-bold">Tesseract.js</span> locally.
-                    </p>
-                    <p className="text-[11px] text-gray-400 leading-relaxed">
-                    Gemma 4 E2B runs in-browser via WebGPU.
+                    Gemma 4 E2B and Tesseract both run in-browser via WebGPU / WASM.
+                    Nothing is uploaded.
                     </p>
                 </div>
                 </div>

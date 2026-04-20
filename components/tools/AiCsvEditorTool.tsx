@@ -389,33 +389,67 @@ const AiCsvEditorTool: React.FC = () => {
         const systemInstruction = `You are a world-class JavaScript data transformation engine.
 INPUT: An array of objects called 'data'.
 CONTEXT:
-- Columns: ${JSON.stringify(headers)} (ALL NAMES ARE LOWERCASE)
+- Columns (exact, lowercase, use as-is): ${JSON.stringify(headers)}
 - Sample Data: ${sampleJson}
 
-HELPERS:
-- str(value): CONVERTS ANYTHING TO STRING. USE THIS BEFORE ANY STRING METHODS like .replace() or .includes()!
-- num(value): CONVERTS ANYTHING TO NUMBER. USE THIS FOR MATH OR NUMERIC COMPARISONS (> < ===)!
+HELPERS AVAILABLE:
+- str(value): coerces to string safely. USE BEFORE any .replace/.includes/.toLowerCase/.split on row values.
+- num(value): coerces to number safely (handles "$1,000", "1.5k"-like strings, null, undefined). USE FOR math and > < === comparisons.
 
-TASK: Write the code to fulfill the user request. 
+OUTPUT FORMAT:
+- Return ONLY executable JavaScript. No explanation. No markdown. No preamble.
+- The final line MUST leave 'data' holding the transformed array.
+- Never redeclare 'data' with let/const/var. Only reassign with 'data = ...'.
+
+COLUMN NAMES:
+- Always reference columns in LOWERCASE exactly as given in the Columns list above.
+- If the user uses capitalization or spaces ("Price Per Unit"), map it to the closest lowercase column (e.g. 'price_per_unit').
+
 RULES:
-1. Column names are case-sensitive and are forced to LOWERCASE.
-2. USE str() FOR STRING OPERATIONS. Example: row.id = str(row.id).replace("a", "b"); 
-3. USE num() FOR MATH. Example: if(num(row.age) > 18) { ... }
-4. DO NOT redeclare 'data'. Use 'data = data.map(...)' or 'data = data.filter(...)'.
-5. **SORTING COMMANDS (CRITICAL)**:
-   - "Z to A", "Largest to Smallest", "Descending" -> \`data.sort((a,b) => num(b.col) - num(a.col))\` (for numbers) OR \`data.sort((a,b) => str(b.col).localeCompare(str(a.col)))\` (for text).
-   - "A to Z", "Smallest to Largest", "Ascending" -> \`data.sort((a,b) => num(a.col) - num(b.col))\` (for numbers).
-   - **WARNING**: "Sort Z to A" implies ORDERING. It DOES NOT mean replacing the letter 'Z' with 'A'. DO NOT generate code using .replace() for sorting tasks.
-6. NEVER explain. Output ONLY valid JS.
-7. REMEMBER PREVIOUS STEPS. If a column was added in a previous message, you can now populate or modify it.
-8. **SUMMARY/AGGREGATION REQUESTS**:
-   - If the user asks for a single value (e.g. "average age", "total sales", "count of rows"), YOU MUST REPLACE 'data' with a single-row array containing the result.
-   - Example: "Average age" -> 
-     \`const avg = data.reduce((s, r) => s + num(r.age), 0) / data.length; 
-     data = [{ average_age: avg }];\`
-   - Example: "Count rows where city is Paris" -> 
-     \`const count = data.filter(r => str(r.city) === 'Paris').length; 
-     data = [{ count: count }];\``;
+
+1. **.map() vs .filter() — MOST COMMON MISTAKE**:
+   - Use .map() to TRANSFORM rows: add columns, update values, conditional updates. Callback MUST return the row object.
+   - Use .filter() to DROP rows. Callback MUST return a boolean. Returning an object from .filter() silently keeps the row UNCHANGED — your transformation will be lost.
+   - "Put 1 in col_x if price > 1000" -> .map:
+     \`data = data.map(r => num(r.price) > 1000 ? { ...r, col_x: "1" } : { ...r, col_x: "" });\`
+   - "Delete rows where status is error" -> .filter:
+     \`data = data.filter(r => str(r.status) !== 'error');\`
+
+2. **ADDING A COLUMN**: Default value is empty string "" unless the user specifies otherwise. Do NOT copy another column's data. Do NOT uppercase anything. Do NOT fabricate data.
+   - "Add column named foo" -> \`data = data.map(r => ({ ...r, foo: "" }));\`
+
+3. **UPDATING A COLUMN** conditionally: return one object in each branch of the ternary, both with the spread.
+   - "Mark foo = 'yes' if age > 18, else 'no'" -> \`data = data.map(r => ({ ...r, foo: num(r.age) > 18 ? "yes" : "no" }));\`
+
+4. **RENAMING A COLUMN**: build a new object without the old key.
+   - "Rename 'name' to 'full_name'" -> \`data = data.map(({ name, ...rest }) => ({ ...rest, full_name: name }));\`
+
+5. **DELETING A COLUMN**: destructure it out.
+   - "Delete the 'temp' column" -> \`data = data.map(({ temp, ...rest }) => rest);\`
+
+6. **CLEARING A COLUMN**: set it to "".
+   - "Clear the foo column" -> \`data = data.map(r => ({ ...r, foo: "" }));\`
+
+7. **SORTING**:
+   - "Z to A", "Largest to Smallest", "Descending" -> \`data.sort((a,b) => num(b.col) - num(a.col))\` (numeric) OR \`data.sort((a,b) => str(b.col).localeCompare(str(a.col)))\` (text).
+   - "A to Z", "Smallest to Largest", "Ascending" -> \`data.sort((a,b) => num(a.col) - num(b.col))\`.
+   - "Sort Z to A" means ORDERING. DO NOT generate .replace("Z","A") for this.
+
+8. **STRING OPS** — always wrap with str() first:
+   - \`str(r.name).toLowerCase()\` not \`r.name.toLowerCase()\`
+   - \`str(r.email).includes('@')\` not \`r.email.includes('@')\`
+
+9. **NUMERIC OPS** — always wrap with num() first:
+   - \`num(r.price) > 1000\` not \`r.price > 1000\`
+   - \`num(r.price) + num(r.tax)\` not \`r.price + r.tax\`
+
+10. **SUMMARY / AGGREGATION**: if user asks for a single value (e.g. "average age", "count", "total sales"), REPLACE data with a single-row array:
+    - "Average age" -> \`const avg = data.reduce((s, r) => s + num(r.age), 0) / data.length; data = [{ average_age: avg }];\`
+    - "Count rows where city is Paris" -> \`const count = data.filter(r => str(r.city).toLowerCase() === 'paris').length; data = [{ count: count }];\`
+
+11. **REMEMBER PREVIOUS STEPS**: if earlier turns added or modified columns, they exist now. Build on them, don't recreate.
+
+12. **AMBIGUOUS REQUEST**: if the column or operation is unclear, pick the most sensible interpretation using the sample data. Never output an empty program or a comment-only program.`;
 
         // Utilize Local Context
         const messages = [
@@ -434,17 +468,34 @@ RULES:
         setStatusMessage('Executing locally...');
         
         let cleanedCode = rawResponse.trim();
-        const codeMatch = rawResponse.match(/```(?:javascript|js)?\s*([\s\S]*?)```/);
+        const codeMatch = rawResponse.match(/```(?:javascript|js|typescript|ts)?\s*([\s\S]*?)```/);
         if (codeMatch) {
             cleanedCode = codeMatch[1].trim();
         } else {
-            cleanedCode = cleanedCode.replace(/^(Code|Logic|JavaScript|Logic Body):\s*/i, '');
+            cleanedCode = cleanedCode.replace(/^(Here(?:'s| is)[^\n]*\n+)/i, '');
+            cleanedCode = cleanedCode.replace(/^(Code|Logic|JavaScript|Logic Body)[:\s-]+/i, '');
         }
 
+        // Strip leading/trailing prose lines that aren't JS
+        const lines = cleanedCode.split('\n');
+        const firstCodeIdx = lines.findIndex(l => /^(data|const|let|var|if|for|while|function|\/\/|\/\*)/.test(l.trim()));
+        if (firstCodeIdx > 0) cleanedCode = lines.slice(firstCodeIdx).join('\n');
+
         cleanedCode = cleanedCode.replace(/(^|\n|\s)(const|let|var)\s+data\s*=/g, '$1data =');
-        
+
+        // Auto-fix: `.filter(r => cond ? {...r, …} : r)` — always-truthy callback
+        // means nothing actually transforms. Convert to .map.
+        cleanedCode = cleanedCode.replace(
+            /data\s*=\s*data\.filter\(\s*([a-zA-Z_$][\w$]*)\s*=>\s*([^?]+)\?\s*(\{[^}]*\.\.\.\1[^}]*\})\s*:\s*(\{[^}]*\.\.\.\1[^}]*\}|\1)\s*\)/g,
+            'data = data.map($1 => $2? $3 : $4)',
+        );
+
         if (!cleanedCode.includes('data =') && !cleanedCode.includes('data.forEach') && (cleanedCode.startsWith('data.') || cleanedCode.startsWith('data ='))) {
             if (!cleanedCode.startsWith('data =')) cleanedCode = 'data = ' + cleanedCode;
+        }
+
+        if (!cleanedCode || cleanedCode.length < 5) {
+            throw new Error('Gemma produced no code. Try rephrasing your request.');
         }
 
         setGeneratedCode(cleanedCode);
@@ -472,7 +523,11 @@ RULES:
         setDownloadReady(true);
     } catch (e: any) {
         console.error("Gemma Processing Error:", e);
-        setError(e.message || "Logic Error. Gemma generated invalid logic.");
+        const base = e.message || "Logic Error. Gemma generated invalid logic.";
+        const hint = /column|undefined|property|is not a function|cannot read/i.test(base)
+            ? " Tip: check the exact column names (case-sensitive, lowercase) in your request."
+            : "";
+        setError(base + hint);
         if (!isLowMemoryMode) {
             const prev = historyRef.current.pop();
             if(prev) fullDataRef.current = prev;
