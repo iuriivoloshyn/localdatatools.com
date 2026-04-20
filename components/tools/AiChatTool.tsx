@@ -5,7 +5,7 @@ import ToolHeader from '../layout/ToolHeader';
 import { 
   MessageSquareText, Send, Image as ImageIcon, Loader2, User, 
   Bot, Trash2, Settings, SlidersHorizontal, Info, X, 
-  Paperclip, Sparkles, Zap, Cpu, Download, Upload
+  Paperclip, Zap, Cpu, Download, Upload
 } from 'lucide-react';
 import { useLanguage } from '../../App';
 import { useGemma } from '../../contexts/GemmaContext';
@@ -34,7 +34,6 @@ const AiChatTool: React.FC = () => {
   
   // Model Config
   const [systemInstruction, setSystemInstruction] = useState("You use context from previous messages and images provided via local OCR to help the user.");
-  const [temperature, setTemperature] = useState(0.7);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +146,7 @@ const AiChatTool: React.FC = () => {
       // 2. Perform OCR on any images
       const ocrResults = await processOcr(currentImages.map(img => img.file));
       
-      // 3. Construct message for Gemma
+      // 3. Construct message for Gemma 4
       let finalPrompt = userText;
       if (ocrResults.length > 0) {
         const ocrCombined = ocrResults.map((text, i) => `[Image ${i+1} OCR Text: ${text}]`).join('\n\n');
@@ -166,11 +165,10 @@ const AiChatTool: React.FC = () => {
         { role: "user", content: finalPrompt }
       ];
 
-      // 5. Send to Gemma
+      // 5. Send to Gemma 4
       const completion = await engine.chat.completions.create({
         messages: apiMessages,
-        temperature: temperature,
-        max_tokens: 1024, 
+        max_tokens: 1024,
       });
 
       const responseText = completion.choices[0].message.content;
@@ -189,7 +187,7 @@ const AiChatTool: React.FC = () => {
       addChatMessage({
         id: Math.random().toString(36).substr(2, 9),
         role: 'model',
-        content: `Error: ${e.message || "Failed to get response from Gemma"}`,
+        content: `Error: ${e.message || "Failed to get response from Gemma 4"}`,
         timestamp: Date.now(),
         isError: true
       });
@@ -265,7 +263,7 @@ const AiChatTool: React.FC = () => {
       <div className={!isModelLoaded ? "" : "shrink-0 mb-4"}>
         <ToolHeader 
           title="AI Chat"
-          description="Talk with Gemma 2 (Local). Integrated Tesseract OCR extracts text from images for discussion context."
+          description="Talk with Gemma 4 E2B (Local). Integrated Tesseract OCR extracts text from images for discussion context."
           instructions={[
             "Click the paperclip or Drag & Drop images for local OCR analysis",
             "History is purely in-memory (resets on reload)",
@@ -283,9 +281,9 @@ const AiChatTool: React.FC = () => {
             <div className="bg-gray-900 border border-rose-500/20 p-12 rounded-3xl text-center shadow-2xl animate-in fade-in zoom-in-95 max-w-2xl mx-auto">
                 <Cpu size={48} className="mx-auto mb-6 text-rose-400" />
                 <h2 className="text-2xl font-bold text-white mb-3">Load Local AI Engine</h2>
-                <p className="text-gray-400 text-sm mb-8 max-w-md mx-auto leading-relaxed">Gemma 2 runs entirely in your browser using WebGPU. No data leaves your device.</p>
+                <p className="text-gray-400 text-sm mb-8 max-w-md mx-auto leading-relaxed">Gemma 4 E2B runs entirely in your browser using WebGPU. No data leaves your device.</p>
                 {!isModelLoading ? (
-                <button onClick={initGemma} className="bg-gradient-to-br from-rose-600 to-pink-700 hover:from-rose-500 hover:to-pink-600 text-white px-10 py-4 rounded-2xl font-bold transition-all shadow-xl flex items-center gap-3 mx-auto active:scale-95"><Download size={20}/> Load Gemma 2B</button>
+                <button onClick={initGemma} className="bg-gradient-to-br from-rose-600 to-pink-700 hover:from-rose-500 hover:to-pink-600 text-white px-10 py-4 rounded-2xl font-bold transition-all shadow-xl flex items-center gap-3 mx-auto active:scale-95"><Download size={20}/> Load Gemma 4 E2B</button>
                 ) : (
                 <div className="space-y-4 max-w-md mx-auto">
                     <div className="flex justify-between text-xs font-black text-rose-400 uppercase tracking-widest"><span>{modelProgress}</span><span>{Math.round(modelProgressVal * 100)}%</span></div>
@@ -321,7 +319,7 @@ const AiChatTool: React.FC = () => {
                         <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center mb-4">
                         <Bot size={32} className="text-rose-400" />
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-2">Gemma is Ready</h3>
+                        <h3 className="text-xl font-bold text-white mb-2">Gemma 4 is Ready</h3>
                         <p className="text-sm text-gray-400 max-w-xs">Ask questions, paste text, or drop images for OCR analysis.</p>
                     </div>
                     ) : (
@@ -431,7 +429,7 @@ const AiChatTool: React.FC = () => {
                             handleSend();
                             }
                         }}
-                        placeholder="Ask Gemma anything..."
+                        placeholder="Ask Gemma 4 anything..."
                         className="flex-1 bg-gray-900 border border-white/10 rounded-2xl px-5 py-3 text-sm text-white placeholder-gray-600 focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500/50 outline-none resize-none custom-scrollbar min-h-[48px] max-h-32"
                         rows={1}
                         />
@@ -470,25 +468,6 @@ const AiChatTool: React.FC = () => {
                     />
                 </div>
 
-                <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <Sparkles size={12} className="text-rose-400" /> Temperature
-                    </label>
-                    <span className="text-[10px] font-mono text-rose-400 font-bold">{temperature.toFixed(1)}</span>
-                    </div>
-                    <input 
-                    type="range" 
-                    min="0" 
-                    max="1.5" 
-                    step="0.1" 
-                    value={temperature}
-                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                    className="w-full accent-rose-500"
-                    />
-                    <p className="text-[9px] text-gray-600 italic">Lower is factual, higher is creative.</p>
-                </div>
-
                 <div className="p-4 bg-rose-500/5 border border-rose-500/10 rounded-2xl space-y-2">
                     <div className="flex items-center gap-2 text-rose-400 mb-1">
                     <Info size={14} />
@@ -498,7 +477,7 @@ const AiChatTool: React.FC = () => {
                     Images are processed using <span className="text-rose-300 font-bold">Tesseract.js</span> locally.
                     </p>
                     <p className="text-[11px] text-gray-400 leading-relaxed">
-                    Gemma 2 runs in-browser via WebGPU.
+                    Gemma 4 E2B runs in-browser via WebGPU.
                     </p>
                 </div>
                 </div>
