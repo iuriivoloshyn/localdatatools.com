@@ -438,6 +438,27 @@ const AiCsvEditorTool: React.FC = () => {
     }
   };
 
+  // Post-run check: if the user asked to extract/parse something and the new
+  // column ends up empty on every row, the logic is almost certainly wrong
+  // (e.g. a bad .includes() guard that never triggers the real match).
+  const checkExtractionResult = (result: any[], prevHeaders: string[], userPrompt: string) => {
+    if (!/\b(extract|parse|pull|split|take|get)\b/i.test(userPrompt)) return;
+    if (result.length === 0) return;
+    const currentKeys = Object.keys(result[0]);
+    const newCols = currentKeys.filter(k => !prevHeaders.includes(k));
+    if (newCols.length === 0) return;
+    const sample = result.slice(0, Math.min(200, result.length));
+    for (const col of newCols) {
+      const allEmpty = sample.every(r => {
+        const v = r[col];
+        return v === null || v === undefined || String(v).trim() === '';
+      });
+      if (allEmpty) {
+        throw new Error(`The new "${col}" column is empty for every row. The extraction probably didn't match the pattern — don't guard with .includes() first; run the regex and fall back to "" if no match.`);
+      }
+    }
+  };
+
   const handleApply = async () => {
     if (!prompt.trim() || !fullDataRef.current.length || !isModelLoaded || !engine) return;
 
@@ -482,8 +503,13 @@ Rules:
 7. Rename col → \`data = data.map(r => { const { ["old"]: v, ...rest } = r; return { ...rest, ["new"]: v }; });\`
 8. Sort desc → \`data.sort((a,b) => num(b["c"]) - num(a["c"]))\`. Asc → flip. "Z to A" = ordering, NOT .replace.
 9. Aggregation (single value) → replace data with one-row array. e.g. \`data = [{ avg: data.reduce((s,r)=>s+num(r["age"]),0)/data.length }];\`
-10. Remember prior turns' columns exist.
-11. No \`data = data\` padding. One statement per operation.`;
+10. **EXTRACTING substrings with regex** — NEVER guard with \`.includes\` first. Just run the match and fall back to "":
+    - Text in parens at end → \`(str(r["name"]).match(/\\(([^)]+)\\)\\s*$/) || [])[1] || ""\`
+    - Text between | and ( → \`(str(r["name"]).match(/\\|\\s*([^()]+?)\\s*\\(/) || [])[1] || ""\`
+    - First word → \`str(r["name"]).trim().split(/\\s+/)[0] || ""\`
+    - e.g. \`data = data.map(r => ({ ...r, ["wear"]: (str(r["name"]).match(/\\(([^)]+)\\)\\s*$/) || [])[1] || "" }));\`
+11. Remember prior turns' columns exist.
+12. No \`data = data\` padding. One statement per operation.`;
 
         // Utilize Local Context
         const messages = [
@@ -543,17 +569,21 @@ Rules:
         setStatusMessage('Executing locally...');
         setGeneratedCode(cleanedCode);
 
+        const prevHeaders = [...headers];
         let result: any[];
         try {
             result = await runWorkerTransformation(fullDataRef.current, cleanedCode, (pct) => setProgress(75 + (pct * 24)));
+            checkExtractionResult(result, prevHeaders, prompt);
         } catch (runErr: any) {
-            // Runtime error — one more retry pass with the runtime error
-            setStatusMessage('Runtime error, retrying with correction...');
+            // Runtime error OR semantic failure (all-empty extraction column) —
+            // retry once with the error as context.
+            setStatusMessage('Logic error, retrying with correction...');
             setProgress(10);
             cleanedCode = await attempt({ badCode: cleanedCode, err: runErr.message || String(runErr) });
             setGeneratedCode(cleanedCode);
             setStatusMessage('Executing locally...');
             result = await runWorkerTransformation(fullDataRef.current, cleanedCode, (pct) => setProgress(75 + (pct * 24)));
+            checkExtractionResult(result, prevHeaders, prompt);
         }
         
         if (!result || !Array.isArray(result)) {
