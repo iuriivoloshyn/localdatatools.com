@@ -367,16 +367,58 @@ const AiCsvEditorTool: React.FC = () => {
       }
   };
 
+  const cleanGeneratedCode = (rawResponse: string): string => {
+    let cleanedCode = rawResponse.trim();
+    const codeMatch = rawResponse.match(/```(?:javascript|js|typescript|ts)?\s*([\s\S]*?)```/);
+    if (codeMatch) {
+        cleanedCode = codeMatch[1].trim();
+    } else {
+        cleanedCode = cleanedCode.replace(/^(Here(?:'s| is)[^\n]*\n+)/i, '');
+        cleanedCode = cleanedCode.replace(/^(Code|Logic|JavaScript|Logic Body)[:\s-]+/i, '');
+    }
+    const lines = cleanedCode.split('\n');
+    const firstCodeIdx = lines.findIndex(l => /^(data|const|let|var|if|for|while|function|\/\/|\/\*)/.test(l.trim()));
+    if (firstCodeIdx > 0) cleanedCode = lines.slice(firstCodeIdx).join('\n');
+    cleanedCode = cleanedCode.replace(/(^|\n|\s)(const|let|var)\s+data\s*=/g, '$1data =');
+    cleanedCode = cleanedCode.replace(
+        /data\s*=\s*data\.filter\(\s*([a-zA-Z_$][\w$]*)\s*=>\s*([^?]+)\?\s*(\{[^}]*\.\.\.\1[^}]*\})\s*:\s*(\{[^}]*\.\.\.\1[^}]*\}|\1)\s*\)/g,
+        'data = data.map($1 => $2? $3 : $4)',
+    );
+    const unsafeHeaders = headers.filter(h => !/^[a-zA-Z_$][\w$]*$/.test(h));
+    for (const h of unsafeHeaders) {
+        const escaped = h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        const pat = new RegExp(`([a-zA-Z_$][\\w$]*)\\.${escaped}(?=[\\s,\\)\\};\\]=<>+\\-*/!?&|]|$)`, 'g');
+        cleanedCode = cleanedCode.replace(pat, (_m, varName) => `${varName}["${h}"]`);
+    }
+    cleanedCode = cleanedCode.replace(/(?:^|\n)\s*data\s*=\s*data\s*;?\s*(?=\n|$)/g, '').trim();
+    cleanedCode = cleanedCode.replace(/[\s"'`]+$/, '');
+    if (!/[;})\]]\s*$/.test(cleanedCode)) {
+        const lastSemi = cleanedCode.lastIndexOf(';');
+        const lastBrace = cleanedCode.lastIndexOf('}');
+        const cut = Math.max(lastSemi, lastBrace);
+        if (cut > 0) cleanedCode = cleanedCode.slice(0, cut + 1);
+    }
+    if (!cleanedCode.includes('data =') && !cleanedCode.includes('data.forEach') && (cleanedCode.startsWith('data.') || cleanedCode.startsWith('data ='))) {
+        if (!cleanedCode.startsWith('data =')) cleanedCode = 'data = ' + cleanedCode;
+    }
+    return cleanedCode;
+  };
+
+  // Validates JS syntax without running it. Throws SyntaxError if invalid.
+  const checkSyntax = (code: string) => {
+    new Function('data', 'str', 'num', code);
+  };
+
   const handleApply = async () => {
     if (!prompt.trim() || !fullDataRef.current.length || !isModelLoaded || !engine) return;
-    
+
     if (!isLowMemoryMode) {
-        if (historyRef.current.length >= 10) historyRef.current.shift(); 
-        historyRef.current.push([...fullDataRef.current]); 
+        if (historyRef.current.length >= 10) historyRef.current.shift();
+        historyRef.current.push([...fullDataRef.current]);
     } else {
         historyRef.current = [];
     }
-    
+
     setIsProcessing(true);
     setStatusMessage('Gemma is generating your logic...');
     setProgress(10);
@@ -416,82 +458,59 @@ Rules:
             { role: "user", content: `USER REQUEST: "${prompt}"` }
         ];
 
-        const completion = await engine.chat.completions.create({
-            messages,
-            temperature: 0.0,
-            max_tokens: 1024,
-            onPartial: (partial: string) => {
-                // Tokens arriving → advance the bar 10% → 70% based on
-                // output length vs a typical ~250-char completion.
-                const frac = Math.min(1, partial.length / 250);
-                setProgress(10 + Math.round(frac * 60));
-            },
-        });
+        // Generate, clean, validate syntax, run. On syntax/execution error,
+        // retry ONCE with the failing code + error as extra context — gives
+        // the small E2B model a chance to self-correct.
+        const attempt = async (retryHint?: { badCode: string; err: string }) => {
+            const attemptMessages = retryHint
+                ? [...messages, {
+                    role: 'assistant' as const,
+                    content: retryHint.badCode,
+                }, {
+                    role: 'user' as const,
+                    content: `That code failed with: ${retryHint.err}. Produce a corrected version. Remember: bracket notation r["col"], .map for transforms, .filter only to drop rows. Output ONLY JS.`,
+                }]
+                : messages;
+            const comp = await engine.chat.completions.create({
+                messages: attemptMessages,
+                temperature: 0.0,
+                max_tokens: 1024,
+                onPartial: (partial: string) => {
+                    const frac = Math.min(1, partial.length / 250);
+                    setProgress(10 + Math.round(frac * 60));
+                },
+            });
+            const cleaned = cleanGeneratedCode(comp.choices[0].message.content);
+            if (!cleaned || cleaned.length < 5) throw new Error('Gemma produced no code. Try rephrasing your request.');
+            checkSyntax(cleaned);
+            return cleaned;
+        };
 
-        const rawResponse = completion.choices[0].message.content;
+        let cleanedCode: string;
+        try {
+            cleanedCode = await attempt();
+        } catch (firstErr: any) {
+            setStatusMessage('First attempt failed, retrying with correction...');
+            setProgress(10);
+            const badCode = firstErr._badCode || '';
+            cleanedCode = await attempt({ badCode, err: firstErr.message || String(firstErr) });
+        }
+
         setStatusMessage('Executing locally...');
-        
-        let cleanedCode = rawResponse.trim();
-        const codeMatch = rawResponse.match(/```(?:javascript|js|typescript|ts)?\s*([\s\S]*?)```/);
-        if (codeMatch) {
-            cleanedCode = codeMatch[1].trim();
-        } else {
-            cleanedCode = cleanedCode.replace(/^(Here(?:'s| is)[^\n]*\n+)/i, '');
-            cleanedCode = cleanedCode.replace(/^(Code|Logic|JavaScript|Logic Body)[:\s-]+/i, '');
-        }
-
-        // Strip leading/trailing prose lines that aren't JS
-        const lines = cleanedCode.split('\n');
-        const firstCodeIdx = lines.findIndex(l => /^(data|const|let|var|if|for|while|function|\/\/|\/\*)/.test(l.trim()));
-        if (firstCodeIdx > 0) cleanedCode = lines.slice(firstCodeIdx).join('\n');
-
-        cleanedCode = cleanedCode.replace(/(^|\n|\s)(const|let|var)\s+data\s*=/g, '$1data =');
-
-        // Auto-fix: `.filter(r => cond ? {...r, …} : r)` — always-truthy callback
-        // means nothing actually transforms. Convert to .map.
-        cleanedCode = cleanedCode.replace(
-            /data\s*=\s*data\.filter\(\s*([a-zA-Z_$][\w$]*)\s*=>\s*([^?]+)\?\s*(\{[^}]*\.\.\.\1[^}]*\})\s*:\s*(\{[^}]*\.\.\.\1[^}]*\}|\1)\s*\)/g,
-            'data = data.map($1 => $2? $3 : $4)',
-        );
-
-        // Auto-fix: rewrite `r.<header>` -> `r["<header>"]` when the header
-        // contains spaces or non-identifier characters (otherwise the code
-        // is a syntax error: `r.big daddy` parses as two tokens).
-        const unsafeHeaders = headers.filter(h => !/^[a-zA-Z_$][\w$]*$/.test(h));
-        for (const h of unsafeHeaders) {
-            // Escape the header for regex, allow any whitespace between words
-            const escaped = h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-            // Match varname.headerStart followed by continuation — capture everything
-            // up to a delimiter so we can replace with bracket access.
-            const pat = new RegExp(`([a-zA-Z_$][\\w$]*)\\.${escaped}(?=[\\s,\\)\\};\\]=<>+\\-*/!?&|]|$)`, 'g');
-            cleanedCode = cleanedCode.replace(pat, (_m, varName) => `${varName}["${h}"]`);
-        }
-
-        // Strip trailing no-op `data = data` lines (model padding)
-        cleanedCode = cleanedCode.replace(/(?:^|\n)\s*data\s*=\s*data\s*;?\s*(?=\n|$)/g, '').trim();
-
-        // Strip trailing stray punctuation (quotes, backticks) the model sometimes tacks on
-        cleanedCode = cleanedCode.replace(/[\s"'`]+$/, '');
-        // If the code doesn't end with a valid JS statement terminator, walk
-        // back to the last one — handles cases like `}));"` or `});extra stuff`
-        if (!/[;})\]]\s*$/.test(cleanedCode)) {
-            const lastSemi = cleanedCode.lastIndexOf(';');
-            const lastBrace = cleanedCode.lastIndexOf('}');
-            const cut = Math.max(lastSemi, lastBrace);
-            if (cut > 0) cleanedCode = cleanedCode.slice(0, cut + 1);
-        }
-
-        if (!cleanedCode.includes('data =') && !cleanedCode.includes('data.forEach') && (cleanedCode.startsWith('data.') || cleanedCode.startsWith('data ='))) {
-            if (!cleanedCode.startsWith('data =')) cleanedCode = 'data = ' + cleanedCode;
-        }
-
-        if (!cleanedCode || cleanedCode.length < 5) {
-            throw new Error('Gemma produced no code. Try rephrasing your request.');
-        }
-
         setGeneratedCode(cleanedCode);
 
-        const result = await runWorkerTransformation(fullDataRef.current, cleanedCode, (pct) => setProgress(75 + (pct * 24)));
+        let result: any[];
+        try {
+            result = await runWorkerTransformation(fullDataRef.current, cleanedCode, (pct) => setProgress(75 + (pct * 24)));
+        } catch (runErr: any) {
+            // Runtime error — one more retry pass with the runtime error
+            setStatusMessage('Runtime error, retrying with correction...');
+            setProgress(10);
+            cleanedCode = await attempt({ badCode: cleanedCode, err: runErr.message || String(runErr) });
+            setGeneratedCode(cleanedCode);
+            setStatusMessage('Executing locally...');
+            result = await runWorkerTransformation(fullDataRef.current, cleanedCode, (pct) => setProgress(75 + (pct * 24)));
+        }
         
         if (!result || !Array.isArray(result)) {
             throw new Error("Transformation failed to return a valid dataset.");
