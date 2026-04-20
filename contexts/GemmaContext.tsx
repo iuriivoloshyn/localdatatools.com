@@ -1,16 +1,29 @@
-
 import React, { createContext, useContext, useState, useRef } from 'react';
-import { MLCEngine, CreateMLCEngine } from "@mlc-ai/web-llm";
+import { FilesetResolver, LlmInference } from '@mediapipe/tasks-genai';
 
-// CONFIGURATION
-const R2_FOLDER_NAME = 'gemma-2-2b-it-q4f16_1-MLC';
 const R2_DOMAIN = 'https://models.localdatatools.com';
+const MODEL_FOLDER = 'gemma-4-E2B-it-web';
+const MODEL_FILE = 'gemma-4-E2B-it-web.task';
+const MODEL_URL = `${R2_DOMAIN}/${MODEL_FOLDER}/${MODEL_FILE}`;
+const MODEL_BYTES_HINT = 2_003_697_664; // ~1.87 GiB; fallback if Content-Length missing
+const CACHE_NAME = 'gemma-4-e2b-v1';
 
-// Unique ID for cache management
-const INTERNAL_MODEL_ID = 'Gemma-2-2b-Local-v4000'; 
+const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai@0.10.27/wasm';
+
+// OpenAI-style message used by AiChatTool and AiCsvEditorTool
+interface ChatMessage { role: 'system' | 'user' | 'assistant' | 'model'; content: string; }
+interface ChatCompletionParams { messages: ChatMessage[]; temperature?: number; max_tokens?: number; }
+interface ChatCompletionResponse { choices: { message: { content: string } }[]; }
+
+// Engine shim that mimics @mlc-ai/web-llm surface: engine.chat.completions.create({...})
+interface EngineShim {
+  chat: { completions: { create: (params: ChatCompletionParams) => Promise<ChatCompletionResponse> } };
+  unload: () => Promise<void>;
+  runtimeStatsText: () => string;
+}
 
 interface GemmaContextType {
-  engine: any;
+  engine: EngineShim | null;
   isModelLoaded: boolean;
   isLoading: boolean;
   progress: string;
@@ -25,160 +38,179 @@ interface GemmaContextType {
 const GemmaContext = createContext<GemmaContextType>({} as GemmaContextType);
 export const useGemma = () => useContext(GemmaContext);
 
+function messagesToGemmaPrompt(messages: ChatMessage[]): string {
+  const systemParts = messages.filter(m => m.role === 'system').map(m => m.content).filter(Boolean);
+  const turns = messages.filter(m => m.role !== 'system');
+
+  let out = '';
+  let firstUserSeen = false;
+  for (const m of turns) {
+    if (m.role === 'user') {
+      let content = m.content;
+      if (!firstUserSeen && systemParts.length > 0) {
+        content = systemParts.join('\n\n') + '\n\n' + content;
+        firstUserSeen = true;
+      } else {
+        firstUserSeen = true;
+      }
+      out += `<start_of_turn>user\n${content}<end_of_turn>\n`;
+    } else {
+      out += `<start_of_turn>model\n${m.content}<end_of_turn>\n`;
+    }
+  }
+  out += '<start_of_turn>model\n';
+  return out;
+}
+
+async function fetchModelBytes(
+  onProgress: (downloadedBytes: number, totalBytes: number) => void,
+): Promise<Uint8Array> {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(MODEL_URL);
+  if (cached) {
+    const buf = await cached.arrayBuffer();
+    onProgress(buf.byteLength, buf.byteLength);
+    return new Uint8Array(buf);
+  }
+
+  const response = await fetch(MODEL_URL);
+  if (!response.ok || !response.body) {
+    throw new Error(`Model fetch failed: HTTP ${response.status}`);
+  }
+  const totalBytes = Number(response.headers.get('content-length')) || MODEL_BYTES_HINT;
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.byteLength;
+    onProgress(received, totalBytes);
+  }
+
+  const full = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    full.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    await cache.put(MODEL_URL, new Response(full.slice(), { headers: { 'Content-Type': 'application/octet-stream' } }));
+  } catch (e) {
+    console.warn('Cache put failed (offline mode unavailable):', e);
+  }
+  return full;
+}
+
 export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [engine, setEngine] = useState<any>(null);
+  const [engine, setEngine] = useState<EngineShim | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [progress, setProgress] = useState('');
   const [progressVal, setProgressVal] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const engineRef = useRef<any>(null);
+  const llmRef = useRef<LlmInference | null>(null);
+  const lastTempRef = useRef<number>(0.7);
   const initializingRef = useRef(false);
-  
+
   const getStats = () => {
-    if (!engineRef.current || !isModelLoaded) return "Engine not active.";
-    try {
-        return engineRef.current.runtimeStatsText();
-    } catch(e) {
-        return "Stats unavailable.";
-    }
+    if (!llmRef.current) return 'Engine not active.';
+    return 'MediaPipe LlmInference — Gemma 4 E2B (int4, WebGPU)';
   };
 
   const resetEngine = async () => {
-    if (engineRef.current) {
-        try {
-            await engineRef.current.unload();
-        } catch (e) {
-            console.warn("Unload failed", e);
-        }
+    if (llmRef.current) {
+      try { llmRef.current.close(); } catch (e) { console.warn('close failed', e); }
     }
+    llmRef.current = null;
     setEngine(null);
-    engineRef.current = null;
     setIsModelLoaded(false);
     initializingRef.current = false;
-    // Reset state but keep progress for UI feedback if needed
     setIsLoading(false);
   };
 
-  const createEngineInternal = async (signalLoaded: boolean = true) => {
+  const buildEngineShim = (llm: LlmInference): EngineShim => ({
+    chat: {
+      completions: {
+        create: async ({ messages, temperature }) => {
+          if (temperature !== undefined && Math.abs(temperature - lastTempRef.current) > 0.01) {
+            try {
+              await llm.setOptions({ temperature });
+              lastTempRef.current = temperature;
+            } catch (e) {
+              console.warn('setOptions(temperature) failed, continuing with previous value', e);
+            }
+          }
+          const prompt = messagesToGemmaPrompt(messages);
+          const text = await llm.generateResponse(prompt);
+          return { choices: [{ message: { content: text } }] };
+        },
+      },
+    },
+    unload: async () => { try { llm.close(); } catch {} },
+    runtimeStatsText: () => 'MediaPipe LlmInference (Gemma 4 E2B)',
+  });
+
+  const createEngineInternal = async (signalLoaded: boolean): Promise<void> => {
     if (initializingRef.current) return;
-    
     initializingRef.current = true;
     setIsLoading(true);
     setError(null);
     setProgress('Detecting WebGPU...');
 
     try {
-        if (!(navigator as any).gpu) {
-            throw new Error("WebGPU is not supported. Please use Chrome or Edge.");
-        }
+      if (!(navigator as any).gpu) {
+        throw new Error('WebGPU is not supported. Please use Chrome or Edge.');
+      }
 
-        const modelBaseUrl = `${R2_DOMAIN}/${R2_FOLDER_NAME}/resolve/main/`;
-        const wasmUrl = `${R2_DOMAIN}/${R2_FOLDER_NAME}/resolve/main/gemma-2-2b-it-q4f16_1-ctx4k_cs1k-webgpu.wasm`;
-        
-        const initProgressCallback = (report: any) => {
-            let unifiedProgress = 0;
-            let userText = report.text;
+      setProgress('Loading runtime...');
+      const wasmFileset = await FilesetResolver.forGenAiTasks(WASM_BASE);
 
-            if (report.text.includes("Fetching")) {
-                unifiedProgress = report.progress * 0.7;
-                userText = `Downloading Weights (${Math.round(report.progress * 100)}%)`;
-            } else if (report.text.includes("Loading")) {
-                unifiedProgress = 0.7 + (report.progress * 0.3);
-                userText = `Loading GPU Memory (${Math.round(report.progress * 100)}%)`;
-            } else {
-                unifiedProgress = report.progress;
-            }
+      setProgress('Downloading Weights (0%)');
+      const modelBytes = await fetchModelBytes((received, total) => {
+        const fraction = total > 0 ? received / total : 0;
+        setProgressVal(fraction * 0.85);
+        setProgress(`Downloading Weights (${Math.round(fraction * 100)}%)`);
+      });
 
-            setProgress(userText);
-            setProgressVal(unifiedProgress);
-        };
+      if (!signalLoaded) {
+        setProgress('Cached for offline use');
+        setProgressVal(1);
+        return;
+      }
 
-        let currentEngine;
-        
-        // Attempt 1: Try with Caching Enabled
-        try {
-            const appConfig = {
-                model_list: [
-                    {
-                        "model_id": INTERNAL_MODEL_ID,
-                        "model": modelBaseUrl, 
-                        "model_lib": wasmUrl,
-                        "vram_required_MB": 3200,
-                        "low_resource_required": false,
-                        "required_features": ["shader-f16"]
-                    }
-                ],
-                useIndexedDBCache: true 
-            };
+      setProgress('Loading GPU Memory...');
+      setProgressVal(0.9);
 
-            currentEngine = await CreateMLCEngine(
-                INTERNAL_MODEL_ID,
-                {
-                    appConfig,
-                    initProgressCallback
-                }
-            );
-        } catch (initError: any) {
-            console.warn("Initial load failed, retrying without cache...", initError);
-            
-            // Attempt 2: Disable Caching (Fixes "Failed to store... Load failed" errors)
-            const appConfigNoCache = {
-                model_list: [
-                    {
-                        "model_id": INTERNAL_MODEL_ID,
-                        "model": modelBaseUrl, 
-                        "model_lib": wasmUrl,
-                        "vram_required_MB": 3200,
-                        "low_resource_required": false,
-                        "required_features": ["shader-f16"]
-                    }
-                ],
-                useIndexedDBCache: false 
-            };
+      const llm = await LlmInference.createFromModelBuffer(wasmFileset, modelBytes);
+      lastTempRef.current = 0.7;
 
-            currentEngine = await CreateMLCEngine(
-                INTERNAL_MODEL_ID,
-                {
-                    appConfig: appConfigNoCache,
-                    initProgressCallback
-                }
-            );
-        }
-        
-        if (signalLoaded) {
-            engineRef.current = currentEngine;
-            setEngine(currentEngine);
-            setIsModelLoaded(true);
-        } else {
-            // IMPORTANT: Add delay before unloading to ensure all IndexedDB cache writes 
-            // (params_shard_*.bin) are finalized. Premature unload closes DB connection 
-            // causing InvalidStateError on pending writes.
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // If just downloading, unload immediately to free VRAM
-            await currentEngine.unload();
-        }
-
+      llmRef.current = llm;
+      setEngine(buildEngineShim(llm));
+      setIsModelLoaded(true);
+      setProgressVal(1);
+      setProgress('Ready');
     } catch (err: any) {
-         console.error("Gemma Fatal Error", err);
-         setError(err.message || "Gemma initialization failed");
-         setIsModelLoaded(false);
-         throw err;
+      console.error('Gemma 4 Fatal Error', err);
+      setError(err.message || 'Gemma initialization failed');
+      setIsModelLoaded(false);
+      throw err;
     } finally {
-        initializingRef.current = false;
-        setIsLoading(false);
+      initializingRef.current = false;
+      setIsLoading(false);
     }
   };
 
   const initGemma = async () => {
-      if (isModelLoaded) return;
-      await createEngineInternal(true);
+    if (isModelLoaded) return;
+    await createEngineInternal(true);
   };
 
   const downloadModelOnly = async () => {
-      if (isModelLoaded) return; // Already have it
-      await createEngineInternal(false);
+    if (isModelLoaded) return;
+    await createEngineInternal(false);
   };
 
   return (

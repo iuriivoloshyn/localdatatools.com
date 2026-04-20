@@ -43,7 +43,7 @@ const TOOL_CONTENT_TRANSLATIONS: Record<string, Record<string, { desc: string; s
       ]
     },
     'AI Chat': {
-      desc: 'Talk with an advanced local-ready AI. Use Gemma 2 (Local) to brainstorm, analyze, or code. Includes integrated Tesseract OCR for image parsing.',
+      desc: 'Talk with an advanced local-ready AI. Use Gemma 4 E2B (Local) to brainstorm, analyze, or code. Includes integrated Tesseract OCR for image parsing.',
       steps: [
         "Type your message to start the conversation",
         "Attach images to extract text and discuss content locally",
@@ -70,7 +70,7 @@ const TOOL_CONTENT_TRANSLATIONS: Record<string, Record<string, { desc: string; s
       ]
     },
     'Smart CSV Editor': {
-      desc: 'Modify datasets using natural language instructions. Powered by a downloadable local LLM (Gemma 2). No API calls, data never leaves your device.',
+      desc: 'Modify datasets using natural language instructions. Powered by a downloadable local LLM (Gemma 4 E2B). No API calls, data never leaves your device.',
       steps: [
         "Upload any CSV file (Data stays local)",
         "Type your instruction (e.g., 'Delete rows where Status is Error')",
@@ -134,7 +134,7 @@ const TOOL_CONTENT_TRANSLATIONS: Record<string, Record<string, { desc: string; s
       ]
     },
     'AI Chat': {
-      desc: 'Общайтесь с продвинутым ИИ локально. Используйте Gemma 2 для идей, анализа или кода. Включает локальный OCR Tesseract.',
+      desc: 'Общайтесь с продвинутым ИИ локально. Используйте Gemma 4 E2B для идей, анализа или кода. Включает локальный OCR Tesseract.',
       steps: [
         'Напишите сообщение, чтобы начать диалог',
         'Прикрепляйте изображения для извлечения текста',

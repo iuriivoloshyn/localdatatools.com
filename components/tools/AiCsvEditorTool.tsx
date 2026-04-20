@@ -499,9 +499,9 @@ RULES:
           <div className="bg-gray-900 border border-fuchsia-500/20 p-12 rounded-3xl text-center shadow-2xl animate-in fade-in zoom-in-95 max-w-2xl mx-auto">
             <Cpu size={48} className="mx-auto mb-6 text-fuchsia-400" />
             <h2 className="text-2xl font-bold text-white mb-3">Load Local AI Engine</h2>
-            <p className="text-gray-400 text-sm mb-8 max-w-md mx-auto leading-relaxed">Gemma 2 runs entirely in your browser using WebGPU. No data leaves your device.</p>
+            <p className="text-gray-400 text-sm mb-8 max-w-md mx-auto leading-relaxed">Gemma 4 E2B runs entirely in your browser using WebGPU. No data leaves your device.</p>
             {!isModelLoading ? (
-              <button onClick={initGemma} className="bg-gradient-to-br from-fuchsia-600 to-purple-700 hover:from-fuchsia-500 hover:to-purple-600 text-white px-10 py-4 rounded-2xl font-bold transition-all shadow-xl flex items-center gap-3 mx-auto active:scale-95"><Download size={20}/> Load Gemma 2B</button>
+              <button onClick={initGemma} className="bg-gradient-to-br from-fuchsia-600 to-purple-700 hover:from-fuchsia-500 hover:to-purple-600 text-white px-10 py-4 rounded-2xl font-bold transition-all shadow-xl flex items-center gap-3 mx-auto active:scale-95"><Download size={20}/> Load Gemma 4 E2B</button>
             ) : (
               <div className="space-y-4 max-w-md mx-auto">
                 <div className="flex justify-between text-xs font-black text-fuchsia-400 uppercase tracking-widest"><span>{modelProgress}</span><span>{Math.round(modelProgressVal * 100)}%</span></div>
