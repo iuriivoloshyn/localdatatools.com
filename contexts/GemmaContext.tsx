@@ -237,12 +237,16 @@ export const GemmaProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setProgress('Loading GPU Memory...');
       setProgressVal(0.9);
 
+      // Vision (maxNumImages > 0) disabled pending upstream MediaPipe fix:
+      // https://github.com/google-ai-edge/mediapipe/issues/6270 — crashes
+      // with "memory access out of bounds" ~43-63s into GPU graph build
+      // on Chrome/macOS, more reliably when vision tokens are reserved.
+      // Re-enable once the issue is resolved.
       const llm = await LlmInference.createFromOptions(wasmFileset, {
         baseOptions: { modelAssetBuffer: modelBytes },
         maxTokens: 4096,
         temperature: 0.7,
         topK: 40,
-        maxNumImages: 3,
       });
 
       llmRef.current = llm;

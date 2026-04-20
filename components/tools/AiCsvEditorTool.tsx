@@ -53,7 +53,7 @@ const parseCsvChunked = async (file: File, onProgress: (pct: number) => void): P
             const line = lines[i].trim();
             if (!line) continue;
             if (isFirstChunk && i === 0) {
-                headers = parseCSVLine(line).map(h => h.toLowerCase());
+                headers = parseCSVLine(line);
                 isFirstChunk = false;
                 continue;
             }
@@ -389,7 +389,7 @@ const AiCsvEditorTool: React.FC = () => {
         const systemInstruction = `You are a world-class JavaScript data transformation engine.
 INPUT: An array of objects called 'data'.
 CONTEXT:
-- Columns (exact, lowercase, use as-is): ${JSON.stringify(headers)}
+- Columns (use EXACTLY as-is, preserving case and any spaces): ${JSON.stringify(headers)}
 - Sample Data: ${sampleJson}
 
 HELPERS AVAILABLE:
@@ -402,8 +402,11 @@ OUTPUT FORMAT:
 - Never redeclare 'data' with let/const/var. Only reassign with 'data = ...'.
 
 COLUMN NAMES:
-- Always reference columns in LOWERCASE exactly as given in the Columns list above.
-- If the user uses capitalization or spaces ("Price Per Unit"), map it to the closest lowercase column (e.g. 'price_per_unit').
+- Column names are case-sensitive. Use them EXACTLY as given in the Columns list — preserve uppercase, lowercase, spaces, underscores, and special characters verbatim. Do NOT normalize the case.
+- **ALWAYS use bracket notation \`r["Column Name"]\` for column access, NOT dot notation.** This avoids syntax errors when column names contain spaces, hyphens, or special characters, and keeps behavior consistent regardless of case.
+  - CORRECT: \`str(r["big daddy"])\`, \`num(r["Unit Price"])\`, \`r["ID"]\`, \`r["steam_price_en"]\`
+  - WRONG: \`r.big daddy\` (SyntaxError), \`r.Unit Price\` (SyntaxError), \`r.id\` (wrong column if the real name is "ID" uppercase)
+- If the user refers to a column with different casing ("price per unit" vs actual column "Price Per Unit"), map to the real column name verbatim via bracket notation.
 
 RULES:
 
@@ -411,45 +414,47 @@ RULES:
    - Use .map() to TRANSFORM rows: add columns, update values, conditional updates. Callback MUST return the row object.
    - Use .filter() to DROP rows. Callback MUST return a boolean. Returning an object from .filter() silently keeps the row UNCHANGED — your transformation will be lost.
    - "Put 1 in col_x if price > 1000" -> .map:
-     \`data = data.map(r => num(r.price) > 1000 ? { ...r, col_x: "1" } : { ...r, col_x: "" });\`
+     \`data = data.map(r => num(r["price"]) > 1000 ? { ...r, ["col_x"]: "1" } : { ...r, ["col_x"]: "" });\`
    - "Delete rows where status is error" -> .filter:
-     \`data = data.filter(r => str(r.status) !== 'error');\`
+     \`data = data.filter(r => str(r["status"]) !== 'error');\`
 
 2. **ADDING A COLUMN**: Default value is empty string "" unless the user specifies otherwise. Do NOT copy another column's data. Do NOT uppercase anything. Do NOT fabricate data.
-   - "Add column named foo" -> \`data = data.map(r => ({ ...r, foo: "" }));\`
+   - "Add column named foo" -> \`data = data.map(r => ({ ...r, ["foo"]: "" }));\`
 
 3. **UPDATING A COLUMN** conditionally: return one object in each branch of the ternary, both with the spread.
-   - "Mark foo = 'yes' if age > 18, else 'no'" -> \`data = data.map(r => ({ ...r, foo: num(r.age) > 18 ? "yes" : "no" }));\`
+   - "Mark foo = 'yes' if age > 18, else 'no'" -> \`data = data.map(r => ({ ...r, ["foo"]: num(r["age"]) > 18 ? "yes" : "no" }));\`
 
-4. **RENAMING A COLUMN**: build a new object without the old key.
-   - "Rename 'name' to 'full_name'" -> \`data = data.map(({ name, ...rest }) => ({ ...rest, full_name: name }));\`
+4. **RENAMING A COLUMN**: build a new object without the old key using bracket notation.
+   - "Rename 'name' to 'full_name'" -> \`data = data.map(r => { const { ["name"]: v, ...rest } = r; return { ...rest, ["full_name"]: v }; });\`
 
-5. **DELETING A COLUMN**: destructure it out.
-   - "Delete the 'temp' column" -> \`data = data.map(({ temp, ...rest }) => rest);\`
+5. **DELETING A COLUMN**: destructure it out using bracket notation.
+   - "Delete the 'temp' column" -> \`data = data.map(r => { const { ["temp"]: _drop, ...rest } = r; return rest; });\`
 
 6. **CLEARING A COLUMN**: set it to "".
-   - "Clear the foo column" -> \`data = data.map(r => ({ ...r, foo: "" }));\`
+   - "Clear the foo column" -> \`data = data.map(r => ({ ...r, ["foo"]: "" }));\`
 
 7. **SORTING**:
-   - "Z to A", "Largest to Smallest", "Descending" -> \`data.sort((a,b) => num(b.col) - num(a.col))\` (numeric) OR \`data.sort((a,b) => str(b.col).localeCompare(str(a.col)))\` (text).
-   - "A to Z", "Smallest to Largest", "Ascending" -> \`data.sort((a,b) => num(a.col) - num(b.col))\`.
+   - "Z to A", "Largest to Smallest", "Descending" -> \`data.sort((a,b) => num(b["col"]) - num(a["col"]))\` (numeric) OR \`data.sort((a,b) => str(b["col"]).localeCompare(str(a["col"])))\` (text).
+   - "A to Z", "Smallest to Largest", "Ascending" -> \`data.sort((a,b) => num(a["col"]) - num(b["col"]))\`.
    - "Sort Z to A" means ORDERING. DO NOT generate .replace("Z","A") for this.
 
-8. **STRING OPS** — always wrap with str() first:
-   - \`str(r.name).toLowerCase()\` not \`r.name.toLowerCase()\`
-   - \`str(r.email).includes('@')\` not \`r.email.includes('@')\`
+8. **STRING OPS** — always wrap with str() first, always bracket-access:
+   - \`str(r["name"]).toLowerCase()\` not \`r.name.toLowerCase()\`
+   - \`str(r["email"]).includes('@')\` not \`r.email.includes('@')\`
 
-9. **NUMERIC OPS** — always wrap with num() first:
-   - \`num(r.price) > 1000\` not \`r.price > 1000\`
-   - \`num(r.price) + num(r.tax)\` not \`r.price + r.tax\`
+9. **NUMERIC OPS** — always wrap with num() first, always bracket-access:
+   - \`num(r["price"]) > 1000\` not \`r.price > 1000\`
+   - \`num(r["price"]) + num(r["tax"])\` not \`r.price + r.tax\`
 
 10. **SUMMARY / AGGREGATION**: if user asks for a single value (e.g. "average age", "count", "total sales"), REPLACE data with a single-row array:
-    - "Average age" -> \`const avg = data.reduce((s, r) => s + num(r.age), 0) / data.length; data = [{ average_age: avg }];\`
-    - "Count rows where city is Paris" -> \`const count = data.filter(r => str(r.city).toLowerCase() === 'paris').length; data = [{ count: count }];\`
+    - "Average age" -> \`const avg = data.reduce((s, r) => s + num(r["age"]), 0) / data.length; data = [{ average_age: avg }];\`
+    - "Count rows where city is Paris" -> \`const count = data.filter(r => str(r["city"]).toLowerCase() === 'paris').length; data = [{ count: count }];\`
 
 11. **REMEMBER PREVIOUS STEPS**: if earlier turns added or modified columns, they exist now. Build on them, don't recreate.
 
-12. **AMBIGUOUS REQUEST**: if the column or operation is unclear, pick the most sensible interpretation using the sample data. Never output an empty program or a comment-only program.`;
+12. **AMBIGUOUS REQUEST**: if the column or operation is unclear, pick the most sensible interpretation using the sample data. Never output an empty program or a comment-only program.
+
+13. **OUTPUT LENGTH**: produce ONLY the statements needed to fulfill the request. Do NOT emit filler lines like \`data = data\` or trailing blank assignments.`;
 
         // Utilize Local Context
         const messages = [
@@ -489,6 +494,22 @@ RULES:
             /data\s*=\s*data\.filter\(\s*([a-zA-Z_$][\w$]*)\s*=>\s*([^?]+)\?\s*(\{[^}]*\.\.\.\1[^}]*\})\s*:\s*(\{[^}]*\.\.\.\1[^}]*\}|\1)\s*\)/g,
             'data = data.map($1 => $2? $3 : $4)',
         );
+
+        // Auto-fix: rewrite `r.<header>` -> `r["<header>"]` when the header
+        // contains spaces or non-identifier characters (otherwise the code
+        // is a syntax error: `r.big daddy` parses as two tokens).
+        const unsafeHeaders = headers.filter(h => !/^[a-zA-Z_$][\w$]*$/.test(h));
+        for (const h of unsafeHeaders) {
+            // Escape the header for regex, allow any whitespace between words
+            const escaped = h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+            // Match varname.headerStart followed by continuation — capture everything
+            // up to a delimiter so we can replace with bracket access.
+            const pat = new RegExp(`([a-zA-Z_$][\\w$]*)\\.${escaped}(?=[\\s,\\)\\};\\]=<>+\\-*/!?&|]|$)`, 'g');
+            cleanedCode = cleanedCode.replace(pat, (_m, varName) => `${varName}["${h}"]`);
+        }
+
+        // Strip trailing no-op `data = data` lines (model padding)
+        cleanedCode = cleanedCode.replace(/(?:^|\n)\s*data\s*=\s*data\s*;?\s*(?=\n|$)/g, '').trim();
 
         if (!cleanedCode.includes('data =') && !cleanedCode.includes('data.forEach') && (cleanedCode.startsWith('data.') || cleanedCode.startsWith('data ='))) {
             if (!cleanedCode.startsWith('data =')) cleanedCode = 'data = ' + cleanedCode;
@@ -683,7 +704,7 @@ RULES:
                                 <tr>
                                     <th className="px-6 py-3.5 text-[10px] font-black text-gray-700 border-r border-gray-800/50 w-16 text-center uppercase tracking-widest">#</th>
                                     {headers.map((h, i) => (
-                                        <th key={i} className="px-6 py-3.5 text-[10px] font-black text-gray-400 border-r border-gray-800/30 uppercase whitespace-nowrap tracking-widest">{h}</th>
+                                        <th key={i} className="px-6 py-3.5 text-[10px] font-black text-gray-400 border-r border-gray-800/30 whitespace-nowrap tracking-wide font-mono">{h}</th>
                                     ))}
                                 </tr>
                             </thead>

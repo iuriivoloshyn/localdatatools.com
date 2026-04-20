@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
 import ToolHeader from '../layout/ToolHeader';
 import { 
-  MessageSquareText, Send, Image as ImageIcon, Loader2, User, 
+  MessageSquareText, Send, Loader2, User, 
   Bot, Trash2, Settings, SlidersHorizontal, Info, X, 
   Paperclip, Zap, Cpu, Download, Upload
 } from 'lucide-react';
@@ -33,9 +33,7 @@ const AiChatTool: React.FC = () => {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   
   // Model Config
-  const [systemInstruction, setSystemInstruction] = useState("You use context from previous messages and images to help the user.");
-  // Image handling: 'vision' = send images directly to Gemma 4; 'ocr' = Tesseract text extraction first
-  const [imageMode, setImageMode] = useState<'vision' | 'ocr'>('vision');
+  const [systemInstruction, setSystemInstruction] = useState("You use context from previous messages and images provided via local OCR to help the user.");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -145,18 +143,13 @@ const AiChatTool: React.FC = () => {
     setIsSending(true);
 
     try {
-      // 2. Build the current user turn's content. Vision mode passes images
-      //    directly to Gemma 4; OCR mode extracts text via Tesseract first.
+      // 2. Extract text from any attached images via Tesseract OCR, then pass
+      //    the transcript to Gemma 4. Native Gemma vision was removed
+      //    pending upstream MediaPipe fix (issue #6270).
       let ocrResults: string[] = [];
-      let currentUserContent: any;
+      let currentUserContent: string;
 
-      if (currentImages.length > 0 && imageMode === 'vision') {
-        const parts: any[] = [];
-        for (const img of currentImages) parts.push({ type: 'image', image: img.file });
-        const promptText = userText || 'Describe what you see in the image(s) above.';
-        parts.push({ type: 'text', text: promptText });
-        currentUserContent = parts;
-      } else if (currentImages.length > 0 && imageMode === 'ocr') {
+      if (currentImages.length > 0) {
         ocrResults = await processOcr(currentImages.map(img => img.file));
         const ocrCombined = ocrResults.map((text, i) => `[Image ${i+1} OCR Text: ${text}]`).join('\n\n');
         currentUserContent = `${ocrCombined}\n\nUser Message: ${userText || 'Please analyze the extracted text above.'}`;
@@ -276,12 +269,12 @@ const AiChatTool: React.FC = () => {
       <div className={!isModelLoaded ? "" : "shrink-0 mb-4"}>
         <ToolHeader 
           title="AI Chat"
-          description="Talk with Gemma 4 E2B (Local). Drop images for native vision analysis, or switch to Tesseract OCR in settings for pure text extraction."
+          description="Talk with Gemma 4 E2B (Local). Integrated Tesseract OCR extracts text from images for discussion context."
           instructions={[
-            "Click the paperclip or Drag & Drop images — Gemma 4 sees them directly by default",
-            "Switch to Tesseract OCR in settings if you only need text extraction",
+            "Click the paperclip or Drag & Drop images for local OCR analysis",
+            "History is purely in-memory (resets on reload)",
             "System Instructions allow you to steer the AI's persona",
-            "Runs entirely in your browser via WebGPU — history resets on reload"
+            "Runs entirely in your browser using WebGPU"
           ]}
           icon={MessageSquareText}
           colorClass="text-rose-400"
@@ -318,7 +311,7 @@ const AiChatTool: React.FC = () => {
                 {isDraggingOver && (
                     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-950/80 backdrop-blur-sm animate-in fade-in">
                         <Upload size={48} className="text-rose-400 mb-4 animate-bounce" />
-                        <h3 className="text-xl font-bold text-white">{imageMode === 'vision' ? 'Drop Images for Gemma 4 to See' : 'Drop Images for Tesseract OCR'}</h3>
+                        <h3 className="text-xl font-bold text-white">Drop Images to Scan</h3>
                     </div>
                 )}
 
@@ -471,31 +464,6 @@ const AiChatTool: React.FC = () => {
                 <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar">
                 <div className="space-y-3">
                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                    <ImageIcon size={12} className="text-rose-400" /> Image handling
-                    </label>
-                    <div className="grid grid-cols-2 gap-2 bg-black/40 p-1 rounded-xl border border-white/5">
-                        <button
-                            onClick={() => setImageMode('vision')}
-                            className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${imageMode === 'vision' ? 'bg-rose-500/20 text-rose-300 shadow-sm ring-1 ring-rose-500/30' : 'text-gray-500 hover:text-gray-300'}`}
-                        >
-                            Gemma Vision
-                        </button>
-                        <button
-                            onClick={() => setImageMode('ocr')}
-                            className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${imageMode === 'ocr' ? 'bg-rose-500/20 text-rose-300 shadow-sm ring-1 ring-rose-500/30' : 'text-gray-500 hover:text-gray-300'}`}
-                        >
-                            Tesseract OCR
-                        </button>
-                    </div>
-                    <p className="text-[10px] text-gray-500 leading-relaxed">
-                        {imageMode === 'vision'
-                            ? 'Images go straight to Gemma 4. It can describe scenes, read handwriting, interpret charts, and answer open-ended questions.'
-                            : 'Tesseract extracts printed text only and sends it to Gemma 4 as a transcript. Faster, but no image understanding.'}
-                    </p>
-                </div>
-
-                <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                     <Zap size={12} className="text-rose-400" /> System Instruction
                     </label>
                     <textarea
@@ -512,8 +480,10 @@ const AiChatTool: React.FC = () => {
                     <span className="text-[10px] font-black uppercase tracking-widest">Privacy Info</span>
                     </div>
                     <p className="text-[11px] text-gray-400 leading-relaxed">
-                    Gemma 4 E2B and Tesseract both run in-browser via WebGPU / WASM.
-                    Nothing is uploaded.
+                    Images are processed using <span className="text-rose-300 font-bold">Tesseract.js</span> locally.
+                    </p>
+                    <p className="text-[11px] text-gray-400 leading-relaxed">
+                    Gemma 4 E2B runs in-browser via WebGPU.
                     </p>
                 </div>
                 </div>
