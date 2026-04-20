@@ -409,6 +409,17 @@ const AiCsvEditorTool: React.FC = () => {
     new Function('data', 'str', 'num', code);
   };
 
+  // Catches the "wrong operation" failure mode: prompt asks to filter rows
+  // but the generated code uses .map, so everything runs successfully but
+  // nothing actually filters. Force a retry.
+  const checkIntent = (code: string, userPrompt: string) => {
+    const filterIntent = /\b(keep only|only rows|only where|keep rows where|remove rows|delete rows|drop rows|filter out|exclude rows)\b/i.test(userPrompt);
+    const usesFilter = /\bdata\s*=\s*data\.filter\(/.test(code) || /\bdata\.filter\(/.test(code);
+    if (filterIntent && !usesFilter) {
+      throw new Error('Prompt asks to filter rows, but the code uses .map (which keeps all rows). Use data.filter(...) with a boolean predicate.');
+    }
+  };
+
   const handleApply = async () => {
     if (!prompt.trim() || !fullDataRef.current.length || !isModelLoaded || !engine) return;
 
@@ -441,15 +452,20 @@ Helpers (always wrap row values):
 Column access: ALWAYS bracket notation r["col name"], never r.col (avoids syntax errors with spaces/specials).
 
 Rules:
-1. .map to transform/add/update, .filter to drop. Returning an object from .filter keeps the row unchanged — DON'T.
+1. **Operation matching** — match the user's intent:
+   - "add column", "set to", "mark as", "update", "fill", "clear" → .map (transform/add/update)
+   - "keep only", "keep rows where", "only rows", "remove rows", "delete rows", "drop rows", "filter out" → .filter (drop rows returning boolean)
+   - Returning an object from .filter keeps the row unchanged — DON'T.
 2. Add column → .map with default "". e.g. \`data = data.map(r => ({ ...r, ["foo"]: "" }));\`
 3. Conditional update → both ternary branches spread r. e.g. \`data = data.map(r => ({ ...r, ["x"]: num(r["price"]) > 1000 ? "1" : "" }));\`
-4. Delete col → \`data = data.map(r => { const { ["x"]: _, ...rest } = r; return rest; });\`
-5. Rename col → \`data = data.map(r => { const { ["old"]: v, ...rest } = r; return { ...rest, ["new"]: v }; });\`
-6. Sort desc → \`data.sort((a,b) => num(b["c"]) - num(a["c"]))\`. Asc → flip. "Z to A" = ordering, NOT .replace.
-7. Aggregation (single value) → replace data with one-row array. e.g. \`data = [{ avg: data.reduce((s,r)=>s+num(r["age"]),0)/data.length }];\`
-8. Remember prior turns' columns exist.
-9. No \`data = data\` padding. One statement per operation.`;
+4. Keep only rows where col == value → \`data = data.filter(r => str(r["col"]) === "value");\`
+5. Remove rows where col matches → \`data = data.filter(r => str(r["col"]) !== "value");\`
+6. Delete col → \`data = data.map(r => { const { ["x"]: _, ...rest } = r; return rest; });\`
+7. Rename col → \`data = data.map(r => { const { ["old"]: v, ...rest } = r; return { ...rest, ["new"]: v }; });\`
+8. Sort desc → \`data.sort((a,b) => num(b["c"]) - num(a["c"]))\`. Asc → flip. "Z to A" = ordering, NOT .replace.
+9. Aggregation (single value) → replace data with one-row array. e.g. \`data = [{ avg: data.reduce((s,r)=>s+num(r["age"]),0)/data.length }];\`
+10. Remember prior turns' columns exist.
+11. No \`data = data\` padding. One statement per operation.`;
 
         // Utilize Local Context
         const messages = [
@@ -483,6 +499,7 @@ Rules:
             const cleaned = cleanGeneratedCode(comp.choices[0].message.content);
             if (!cleaned || cleaned.length < 5) throw new Error('Gemma produced no code. Try rephrasing your request.');
             checkSyntax(cleaned);
+            checkIntent(cleaned, prompt);
             return cleaned;
         };
 
