@@ -491,6 +491,34 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
     return () => { document.body.style.overflow = ''; };
   }, [isZenMode]);
 
+  // Keep the document head in sync with the current route on client-side
+  // navigation, mirroring the per-route tags baked in at build time
+  // (see seo/prerender-plugin.mjs) so canonical/OG never drift back to home.
+  const setMetaAttr = (selector: string, attr: 'content' | 'href', value: string) => {
+    const el = document.querySelector(selector) as HTMLMetaElement | HTMLLinkElement | null;
+    if (el) (el as any)[attr] = value;
+  };
+
+  const applyRouteMeta = (tool: ToolType | 'dashboard' | null) => {
+    const slug = tool ? (TOOL_TO_SLUG[tool] || tool) : '';
+    const url = `https://localdatatools.com${slug ? `/${slug}` : '/'}`;
+    const cfg = tool ? TOOLS_LIST.find(t => t.id === tool) : null;
+    const title = tool
+      ? (cfg ? `${cfg.label} — Local Data Tools` : 'Local Data Tools')
+      : 'Local Data Tools — Free Offline File Converter, CSV Merger, OCR & Data Toolkit';
+    const desc = cfg
+      ? `${cfg.description} Runs entirely in your browser — no uploads, 100% private.`
+      : 'Local Data Tools — free, offline-first browser toolkit. Merge & compare CSVs, convert documents (DOCX, PDF), images, audio, video, OCR, compress files, and anonymize data. No uploads, 100% private.';
+    document.title = title;
+    setMetaAttr('link[rel="canonical"]', 'href', url);
+    setMetaAttr('meta[name="description"]', 'content', desc);
+    setMetaAttr('meta[property="og:url"]', 'content', url);
+    setMetaAttr('meta[property="og:title"]', 'content', title);
+    setMetaAttr('meta[property="og:description"]', 'content', desc);
+    setMetaAttr('meta[name="twitter:title"]', 'content', title);
+    setMetaAttr('meta[name="twitter:description"]', 'content', desc);
+  };
+
   const handleToolClick = (tool: ToolType | 'dashboard' | null) => {
     if (tool === activeTool) return;
     if (tool) {
@@ -501,15 +529,7 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
     const slug = tool ? (TOOL_TO_SLUG[tool] || tool) : '';
     const newPath = slug ? `/${slug}` : '/';
     window.history.pushState(null, '', newPath);
-    // Update title & canonical
-    if (!tool) {
-      document.title = 'Local Data Tools — Free Offline File Converter, CSV Merger, OCR & Data Toolkit';
-    } else {
-      const toolConfig = TOOLS_LIST.find(t => t.id === tool);
-      document.title = toolConfig ? `${toolConfig.label} — Local Data Tools` : 'Local Data Tools';
-    }
-    const canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
-    if (canonical) canonical.href = `https://localdatatools.com${newPath}`;
+    applyRouteMeta(tool);
   };
 
   // Browser back/forward navigation
@@ -518,6 +538,7 @@ const AppContent: React.FC<{ onNavigateReady?: (fn: (tool: ToolType) => void) =>
       const tool = getToolFromPath();
       if (tool) setVisitedTools(prev => new Set(prev).add(tool));
       setActiveTool(tool);
+      applyRouteMeta(tool);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);

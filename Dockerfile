@@ -11,4 +11,6 @@ WORKDIR /app
 COPY --from=builder /app/dist ./dist
 ENV PORT=8080
 EXPOSE 8080
-CMD ["serve", "-s", "dist", "-l", "8080"]
+# No "-s": the SEO prerender emits a real HTML file per route (dist/<slug>/index.html),
+# and `serve -s` would rewrite every path to home, defeating the per-route canonicals.
+CMD ["serve", "dist", "-l", "8080"]
